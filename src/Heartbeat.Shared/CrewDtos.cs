@@ -193,3 +193,10 @@ public sealed record CheckUpDetailDto(
     Guid? SupersedesId,
     IReadOnlyList<ReadingDto> Readings,
     IReadOnlyList<ReadingEvaluation> Evaluations);
+
+
+/// <summary>One tick box in the role checklist (GET /permissions).</summary>
+public sealed record PermissionDto(string Key, string Group, string Description);
+
+/// <summary>Body of POST /roles and PUT /roles/{id}.</summary>
+public sealed record SaveRoleRequest(string Name, IReadOnlyList<string> Permissions);

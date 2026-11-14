@@ -2,6 +2,7 @@ using Heartbeat.Api.Auth;
 using Heartbeat.Api.Crew;
 using Heartbeat.Api.Data;
 using Heartbeat.Api.Data.Entities;
+using Heartbeat.Api.Roles;
 using Heartbeat.Api.Vitals;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -63,6 +64,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(AuthConstants.CrewPolicy, policy => policy.RequireAuthenticatedUser().RequireClaim("aud", AuthConstants.CrewAudience));
     options.AddPolicy(AuthConstants.McPolicy, policy => policy.RequireAuthenticatedUser().RequireClaim("aud", AuthConstants.McAudience));
     options.AddPermissionPolicies();
+    options.AddRolePolicies();
 });
 
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
@@ -89,6 +91,7 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapMcCrewEndpoints();
 app.MapMcVitalsEndpoints();
+app.MapMcRolesEndpoints();
 app.MapCrewEndpoints();
 
 app.Run();
