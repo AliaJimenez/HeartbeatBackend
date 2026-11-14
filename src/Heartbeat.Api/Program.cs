@@ -2,6 +2,7 @@ using Heartbeat.Api.Auth;
 using Heartbeat.Api.Data;
 using Heartbeat.Api.Data.Entities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -43,9 +44,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("Crew", policy => policy.RequireAuthenticatedUser().RequireClaim("aud", "heartbeat-crew"));
-    options.AddPolicy("Mc", policy => policy.RequireAuthenticatedUser().RequireClaim("aud", "heartbeat-mc"));
+    options.AddPolicy(AuthConstants.CrewPolicy, policy => policy.RequireAuthenticatedUser().RequireClaim("aud", AuthConstants.CrewAudience));
+    options.AddPolicy(AuthConstants.McPolicy, policy => policy.RequireAuthenticatedUser().RequireClaim("aud", AuthConstants.McAudience));
+    options.AddPermissionPolicies();
 });
+
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
 
 builder.Services.AddSingleton<JwtTokenService>();
 
@@ -69,3 +73,5 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 
 app.Run();
+
+public partial class Program;
