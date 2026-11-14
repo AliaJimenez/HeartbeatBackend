@@ -3,6 +3,7 @@ using Heartbeat.Api.Crew;
 using Heartbeat.Api.Data;
 using Heartbeat.Api.Data.Entities;
 using Heartbeat.Api.Roles;
+using Heartbeat.Api.Users;
 using Heartbeat.Api.Vitals;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -92,6 +93,7 @@ app.MapAuthEndpoints();
 app.MapMcCrewEndpoints();
 app.MapMcVitalsEndpoints();
 app.MapMcRolesEndpoints();
+app.MapMcUsersEndpoints();
 app.MapCrewEndpoints();
 
 app.Run();

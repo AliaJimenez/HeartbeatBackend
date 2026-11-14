@@ -200,3 +200,20 @@ public sealed record PermissionDto(string Key, string Group, string Description)
 
 /// <summary>Body of POST /roles and PUT /roles/{id}.</summary>
 public sealed record SaveRoleRequest(string Name, IReadOnlyList<string> Permissions);
+
+
+/// <summary>Body of POST /users.</summary>
+public sealed record CreateUserRequest(
+    string UserName,
+    string Email,
+    string DisplayName,
+    string Password,
+    Guid RoleId);
+
+/// <summary>Body of PUT /users/{id}. UserName and role are changed elsewhere.</summary>
+public sealed record UpdateUserRequest(
+    string Email,
+    string DisplayName);
+
+/// <summary>Body of PUT /users/{id}/role.</summary>
+public sealed record SetUserRoleRequest(Guid RoleId);
