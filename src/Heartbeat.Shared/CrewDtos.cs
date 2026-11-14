@@ -217,3 +217,19 @@ public sealed record UpdateUserRequest(
 
 /// <summary>Body of PUT /users/{id}/role.</summary>
 public sealed record SetUserRoleRequest(Guid RoleId);
+
+
+/// <summary>A critical-result alert as shown in Mission Control (GET /alerts).</summary>
+public sealed record AlertDto(
+    Guid Id,
+    Guid AstronautId,
+    string AstronautName,
+    Guid CheckUpId,
+    IReadOnlyList<IndicatorType> Indicators,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? AcknowledgedAt,
+    string? AcknowledgedBy,
+    string? AcknowledgeNote);
+
+/// <summary>Body of POST /alerts/{id}/acknowledge.</summary>
+public sealed record AcknowledgeAlertRequest(string Note);

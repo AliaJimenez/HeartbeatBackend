@@ -1,3 +1,4 @@
+using Heartbeat.Api.Alerts;
 using Heartbeat.Api.Auth;
 using Heartbeat.Api.Crew;
 using Heartbeat.Api.Data;
@@ -94,6 +95,7 @@ app.MapMcCrewEndpoints();
 app.MapMcVitalsEndpoints();
 app.MapMcRolesEndpoints();
 app.MapMcUsersEndpoints();
+app.MapMcAlertsEndpoints();
 app.MapCrewEndpoints();
 
 app.Run();
