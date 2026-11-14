@@ -22,7 +22,7 @@ Cómo trabajamos los 5 con el GitHub Project **Heartbeat · NASA Space Apps 2026
 
 **Todos los tickets viven en `HeartbeatBackend`**, también los de frontend. Así el Project y el bot de dependencias funcionan desde un solo lugar.
 
-- Desde un PR en otro repo, el ticket se cierra con la referencia completa: `Closes AliaJimenez/HeartbeatBackend#27`. El ticket se cierra cuando el PR se fusiona en la rama por defecto de ese repo.
+- Desde un PR en otro repo, el ticket se cierra con la referencia completa: `Closes AliaJimenez/HeartbeatBackend#27`. El ticket se cierra cuando el PR se fusiona en `dev`, que es la rama por defecto de los 3 repos.
 - Para enlazar commits sin cerrar: `Refs AliaJimenez/HeartbeatBackend#27`.
 
 ### Código compartido (submódulo)
@@ -41,6 +41,25 @@ git submodule add https://github.com/AliaJimenez/HeartbeatBackend.git external/H
 - Para traer cambios nuevos de Shared: `git submodule update --remote external/HeartbeatBackend` y haz commit del puntero actualizado.
 - En GitHub Actions: `actions/checkout` con `submodules: recursive`.
 - **No edites Shared desde el submódulo.** Los cambios a Shared van como PR en `HeartbeatBackend`.
+
+## Ramas: todo va a `dev`, nunca a `main`
+
+| Rama | Regla |
+| --- | --- |
+| `dev` | **Rama por defecto** de los 3 repos. Solo se cambia por PR: no se puede hacer push directo, ni borrarla, ni hacer force-push. Aquí corre el CI. |
+| `main` | **No se toca.** Está bloqueada para todos; solo la dueña del repo puede actualizarla, y únicamente para una entrega o release. |
+| `<n>-descripcion` | Tu rama de trabajo. Sale de `dev` y vuelve a `dev` por PR. |
+
+- `dev` es la rama por defecto porque GitHub solo cierra issues con `Closes …` al fusionar en la rama por defecto. Así cada merge a `dev` cierra el ticket y el bot desbloquea lo siguiente.
+- Los workflows de CI usan:
+  ```yaml
+  on:
+    pull_request:
+      branches: [dev]
+    push:
+      branches: [dev]
+  ```
+- Al crear el PR, comprueba que la base sea **`dev`** (es la opción por defecto).
 
 ## Etiquetas
 
@@ -68,8 +87,8 @@ Las etiquetas `listo` / `bloqueado` **las pone el bot**, no a mano.
 
 1. En el Project, abre la vista **Mis tickets listos** (o filtra `assignee:@me label:listo`).
 2. Toma el de mayor prioridad y muévelo a **En progreso**.
-3. Rama: `<clave-o-número>-descripcion-corta`, por ejemplo `13-crew-sync`.
-4. PR con `Closes #13` en la descripción. Al hacer merge el issue se cierra → el bot desbloquea lo siguiente y avisa a quien le toca.
+3. Actualiza `dev` (`git switch dev && git pull`) y crea tu rama desde ahí: `<número>-descripcion-corta`, por ejemplo `13-crew-sync`.
+4. Abre el PR **hacia `dev`** con `Closes #13` en la descripción. Desde los repos de frontend usa `Closes AliaJimenez/HeartbeatBackend#13`. Al fusionarlo, el issue se cierra y el bot desbloquea lo siguiente y avisa a quien le toca.
 5. Revisión: cualquier otra persona del equipo; idealmente quien depende de tu ticket.
 
 ## Si estás bloqueado
