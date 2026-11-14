@@ -162,3 +162,41 @@ public sealed record UpdateAstronautRequest(
     string? Notes);
 
 public sealed record ResetPasswordRequest(string NewPassword);
+
+
+/// <summary>Latest value of one indicator for the dashboard (AstronautStatusDto).</summary>
+public sealed record IndicatorStatusDto(
+    IndicatorType Indicator,
+    decimal Value,
+    decimal? SecondaryValue,
+    string Unit,
+    HealthStatus Status,
+    string Label,
+    DateTimeOffset RecordedAt,
+    Guid CheckUpId);
+
+/// <summary>OverallStatus is null until the astronaut has synced a check-up.</summary>
+public sealed record AstronautStatusDto(
+    Guid AstronautId,
+    HealthStatus? OverallStatus,
+    DateTimeOffset? LastSyncAt,
+    IReadOnlyList<IndicatorStatusDto> Indicators);
+
+/// <summary>CheckUpDto fields plus the evaluation (label, guidance, escalation, sources) of each reading.</summary>
+public sealed record CheckUpDetailDto(
+    Guid Id,
+    DateTimeOffset RecordedAt,
+    DateTimeOffset? ReceivedAt,
+    HealthStatus OverallStatus,
+    string RangesVersion,
+    string? Note,
+    Guid? SupersedesId,
+    IReadOnlyList<ReadingDto> Readings,
+    IReadOnlyList<ReadingEvaluation> Evaluations);
+
+
+/// <summary>One tick box in the role checklist (GET /permissions).</summary>
+public sealed record PermissionDto(string Key, string Group, string Description);
+
+/// <summary>Body of POST /roles and PUT /roles/{id}.</summary>
+public sealed record SaveRoleRequest(string Name, IReadOnlyList<string> Permissions);

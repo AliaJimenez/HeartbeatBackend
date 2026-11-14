@@ -2,6 +2,8 @@ using Heartbeat.Api.Auth;
 using Heartbeat.Api.Crew;
 using Heartbeat.Api.Data;
 using Heartbeat.Api.Data.Entities;
+using Heartbeat.Api.Roles;
+using Heartbeat.Api.Vitals;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -12,6 +14,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
+
+// CONTRACTS.md §1: enums travel as camelCase strings.
+builder.Services.ConfigureHttpJsonOptions(o =>
+    o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
+
+builder.Services.AddSingleton<Heartbeat.Api.Vitals.RangesCatalog>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -27,7 +35,15 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
 .AddEntityFrameworkStores<AppDbContext>();
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "dev-only-signing-key-change-me-please-32chars";
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+// AddIdentity registers cookie auth as the default scheme; the APIs are bearer-only, so override all defaults
+// (otherwise tokens are never read and anonymous calls get redirected to /Account/Login instead of a 401).
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultForbidScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
     .AddJwtBearer(options =>
     {
         options.MapInboundClaims = false;
@@ -48,6 +64,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(AuthConstants.CrewPolicy, policy => policy.RequireAuthenticatedUser().RequireClaim("aud", AuthConstants.CrewAudience));
     options.AddPolicy(AuthConstants.McPolicy, policy => policy.RequireAuthenticatedUser().RequireClaim("aud", AuthConstants.McAudience));
     options.AddPermissionPolicies();
+    options.AddRolePolicies();
 });
 
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
@@ -73,6 +90,8 @@ app.UseAuthorization();
 
 app.MapAuthEndpoints();
 app.MapMcCrewEndpoints();
+app.MapMcVitalsEndpoints();
+app.MapMcRolesEndpoints();
 app.MapCrewEndpoints();
 
 app.Run();
