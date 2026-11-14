@@ -58,7 +58,9 @@ public sealed class JwtTokenService
 
     public ClaimsPrincipal? ValidateRefreshToken(string token, string audience)
     {
-        var handler = new JwtSecurityTokenHandler();
+        // Keep claim names as issued ('sub', 'name'); the default maps 'sub' to ClaimTypes.NameIdentifier,
+        // which made every refresh look like it had no user id.
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
         var parameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
