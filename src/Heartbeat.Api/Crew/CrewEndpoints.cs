@@ -16,6 +16,7 @@ public static class CrewEndpoints
         group.MapGet("/me", GetMeAsync);
         group.MapPut("/me", UpdateMeAsync);
         group.MapPost("/sync", SyncAsync);
+        group.MapGet("/checkups", GetCheckUpsAsync);
 
         return app;
     }
@@ -277,6 +278,77 @@ public static class CrewEndpoints
             responseProfile,
             new SyncInbound(inboundMessages, acknowledgedAlerts),
             rangesUpdateAvailable));
+    }
+
+    private static async Task<IResult> GetCheckUpsAsync(
+        ClaimsPrincipal principal,
+        AppDbContext db,
+        DateTimeOffset? from = null,
+        DateTimeOffset? to = null,
+        int page = 1,
+        int pageSize = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Problem(title: "Invalid token", statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 1;
+        if (pageSize > 200) pageSize = 200;
+
+        var supersededIds = await db.CheckUps
+            .Where(c => c.AstronautId == userId.Value && c.SupersedesId != null)
+            .Select(c => c.SupersedesId!.Value)
+            .ToListAsync(cancellationToken);
+
+        var query = db.CheckUps
+            .AsNoTracking()
+            .Where(c => c.AstronautId == userId.Value && !supersededIds.Contains(c.Id));
+
+        if (from.HasValue)
+        {
+            query = query.Where(c => c.RecordedAt >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(c => c.RecordedAt <= to.Value);
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(c => c.RecordedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Include(c => c.Readings)
+            .ToListAsync(cancellationToken);
+
+        var dtoItems = items.Select(ToCheckUpDto).ToList();
+
+        return Results.Ok(new Paged<CheckUpDto>(dtoItems, page, pageSize, total));
+    }
+
+    private static CheckUpDto ToCheckUpDto(CheckUp checkUp)
+    {
+        return new CheckUpDto(
+            checkUp.Id,
+            checkUp.RecordedAt,
+            checkUp.ReceivedAt,
+            checkUp.OverallStatus,
+            checkUp.RangesVersion,
+            checkUp.Note,
+            checkUp.SupersedesId,
+            checkUp.Readings.Select(r => new ReadingDto(
+                r.Id,
+                r.Indicator,
+                r.Value,
+                r.SecondaryValue,
+                r.Status,
+                r.BandIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList())).ToList());
     }
 
     private static AstronautProfile ToProfile(Astronaut astronaut)
