@@ -132,3 +132,33 @@ public sealed record McLoginResponse(
     string RefreshToken,
     DateTimeOffset RefreshTokenExpiresAt,
     PortalUserDto User);
+
+/// <summary>One card per astronaut on the Mission Control overview (NR-08).
+/// OverallStatus and LastCheckUpAt are null until the astronaut has synced a check-up.</summary>
+public sealed record CrewSummaryDto(
+    Guid AstronautId,
+    string DisplayName,
+    string? CallSign,
+    HealthStatus? OverallStatus,
+    DateTimeOffset? LastCheckUpAt,
+    DateTimeOffset? LastSyncAt,
+    int OpenAlerts,
+    int UnreadMessages);
+
+public sealed record CreateAstronautRequest(
+    string UserName,
+    string DisplayName,
+    string? CallSign,
+    Guid MissionId,
+    DateOnly? DateOfBirth,
+    string? Notes,
+    string Password);
+
+public sealed record UpdateAstronautRequest(
+    string DisplayName,
+    string? CallSign,
+    Guid MissionId,
+    DateOnly? DateOfBirth,
+    string? Notes);
+
+public sealed record ResetPasswordRequest(string NewPassword);

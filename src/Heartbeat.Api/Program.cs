@@ -72,6 +72,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAuthEndpoints();
+app.MapMcCrewEndpoints();
 app.MapCrewEndpoints();
 
 app.Run();
