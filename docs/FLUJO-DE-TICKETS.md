@@ -17,8 +17,8 @@ Cómo trabajamos los 5 con el GitHub Project **Heartbeat · NASA Space Apps 2026
 | Repo | Contenido |
 | --- | --- |
 | [`AliaJimenez/HeartbeatBackend`](https://github.com/AliaJimenez/HeartbeatBackend) | API, `Heartbeat.Shared`, `Heartbeat.Client`, contratos y **todos los tickets** |
-| Repo del escritorio (WPF) | App de los astronautas |
-| Repo del portal (Blazor) | Portal de control de misión |
+| [`IsaiasMorillo/HeartbeatFrontDesktop`](https://github.com/IsaiasMorillo/HeartbeatFrontDesktop) | App de escritorio WPF de los astronautas (@AliaJimenez) |
+| [`IsaiasMorillo/HeartbeatFrontWeb`](https://github.com/IsaiasMorillo/HeartbeatFrontWeb) | Portal Blazor de control de misión (@IsaiasMorillo) |
 
 **Todos los tickets viven en `HeartbeatBackend`**, también los de frontend. Así el Project y el bot de dependencias funcionan desde un solo lugar.
 
