@@ -109,3 +109,26 @@ public sealed record Paged<T>(
     int Page,
     int PageSize,
     int Total);
+
+public sealed record RoleDto(
+    Guid Id,
+    string Name,
+    bool IsSystem,
+    int UserCount,
+    IReadOnlyList<string> Permissions);
+
+public sealed record PortalUserDto(
+    Guid Id,
+    string UserName,
+    string Email,
+    string DisplayName,
+    RoleDto Role,
+    bool IsActive,
+    IReadOnlyList<string> Permissions);
+
+public sealed record McLoginResponse(
+    string AccessToken,
+    DateTimeOffset AccessTokenExpiresAt,
+    string RefreshToken,
+    DateTimeOffset RefreshTokenExpiresAt,
+    PortalUserDto User);
