@@ -2,9 +2,6 @@ using System.Text.Json;
 
 namespace Heartbeat.Shared;
 
-/// <summary>
-/// Access to the embedded reference-ranges.json resource.
-/// </summary>
 public static class ReferenceRanges
 {
     public const string ResourceName = "Heartbeat.Shared.reference-ranges.json";
