@@ -1,0 +1,495 @@
+# Heartbeat — Data Model & API Contracts
+
+Version 0.1 · Nov 14, 2026 · Hours 0–4 deliverable
+
+This file is the agreement every workstream builds against. Change it only by team agreement, and bump the version when you do.
+
+- **Reference ranges and guidance:** [`reference-ranges.json`](reference-ranges.json) (MR-03, MR-04, MR-07)
+- **Desktop app:** WPF (`net10.0-windows`), SQLite through EF Core
+- **Backend:** one ASP.NET Core host, two route groups: `/api/crew/v1` and `/api/mc/v1`
+- **Portal:** Blazor Web App that calls only `/api/mc/v1`
+
+---
+
+## 1. Conventions
+
+| Topic | Rule |
+| --- | --- |
+| IDs | `Guid` (v7 via `Guid.CreateVersion7()`), generated **by whoever creates the record**. The desktop creates check-up, reading and message IDs offline, so a sync can be retried safely. |
+| Time | UTC everywhere, sent as ISO-8601 `DateTimeOffset` (`2026-11-14T09:30:00Z`). The UI converts to local time or mission elapsed time. |
+| JSON | camelCase; enums as camelCase strings (`"critical"`, not `2`). |
+| Decimals | `decimal` in C#; JSON numbers. |
+| Errors | RFC 7807 `ProblemDetails`. Validation errors use `ValidationProblemDetails` with `errors` per field. |
+| Paging | `?page=1&pageSize=50` → `{ "items": [...], "page": 1, "pageSize": 50, "total": 312 }` |
+| Auth | `Authorization: Bearer <jwt>`. Crew and MC tokens have different audiences and are not accepted by the other API. |
+| Status codes | 200 read/update, 201 create, 204 no body, 400 validation, 401 no/invalid token, 403 missing permission, 404 not found or not yours, 409 conflict. |
+
+---
+
+## 2. Shared library (`Heartbeat.Shared`)
+
+Used by the backend **and** the desktop app, so offline results match server results exactly.
+
+```csharp
+namespace Heartbeat.Shared;
+
+public enum IndicatorType { BloodPressure, HeartRate, BloodSugar, BodyTemperature, Sleep, Mood }
+public enum HealthStatus  { Normal = 0, Watch = 1, Critical = 2 }   // order matters: worst = max
+public enum Hazard        { SpaceRadiation, IsolationAndConfinement, DistanceFromEarth, GravityFields, HostileClosedEnvironment }
+public enum EscalationContact { Self, CrewMedicalOfficer }
+
+// What the astronaut enters. BloodPressure: Value = systolic, SecondaryValue = diastolic.
+public sealed record ReadingInput(IndicatorType Indicator, decimal Value, decimal? SecondaryValue = null);
+
+public sealed record ReadingEvaluation(
+    IndicatorType Indicator,
+    HealthStatus Status,
+    IReadOnlyList<string> BandIds,        // e.g. ["bp-sys-watch-high", "bp-dia-normal"]
+    string Label,                         // label of the worst band
+    IReadOnlyList<string> Guidance,       // guidance of the worst band(s), de-duplicated
+    Escalation? Escalation,               // null when Normal
+    IReadOnlyList<SourceLink> Sources);
+
+public sealed record Escalation(EscalationContact Contact, string Message);
+public sealed record SourceLink(string Title, Uri Url);
+
+public sealed record CheckUpEvaluation(
+    HealthStatus OverallStatus,           // worst of all readings
+    IReadOnlyList<ReadingEvaluation> Readings,
+    string RangesVersion);
+
+public interface IHealthEvaluator
+{
+    string RangesVersion { get; }
+    ReadingEvaluation Evaluate(ReadingInput input);
+    CheckUpEvaluation Evaluate(IEnumerable<ReadingInput> inputs);
+    IReadOnlyList<string> Validate(ReadingInput input);   // empty = valid; uses validRange
+}
+```
+
+### Evaluation rules
+
+1. Reject the value if it is outside `validRange`; that is a typing error, not a status.
+2. Find the band where `min <= value < max` (missing `min` or `max` means no limit).
+3. Blood pressure: evaluate systolic and diastolic separately; the reading's status is the worse of the two.
+4. A check-up's overall status is the worst status among its readings.
+5. `Watch` and `Critical` always carry guidance (MR-04). `Critical` always carries an escalation to the crew medical officer and raises an alert in the portal (MR-06).
+6. The JSON file is an embedded resource in `Heartbeat.Shared`. The server can also serve a newer copy (`GET /api/crew/v1/reference-ranges`), which the desktop caches.
+
+---
+
+## 3. Data model
+
+One database schema on the server (SQL Server or SQLite, depending on hosting). The desktop keeps a subset in SQLite.
+
+```mermaid
+erDiagram
+    Mission ||--o{ Astronaut : crews
+    Astronaut ||--o{ CheckUp : records
+    CheckUp ||--|{ Reading : contains
+    Astronaut ||--o{ Message : "sends / receives"
+    CheckUp ||--o| Alert : raises
+    PortalUser }o--|| Role : has
+    Role ||--o{ RolePermission : grants
+    Alert }o--o| PortalUser : "acknowledged by"
+```
+
+### Entities
+
+**Mission**
+| Field | Type | Notes |
+| --- | --- | --- |
+| Id | Guid | |
+| Name | string(100) | "Artemis Demo 1" |
+| Environment | string(30) | `spacecraft`, `station`, `rover`, `lunarBase`, `marsBase` (NR-10 later) |
+| StartsAt | DateTimeOffset | used for "mission day N" |
+
+**Astronaut** (desktop login account; lives in Identity as a user with `AccountType = Astronaut`)
+| Field | Type | Notes |
+| --- | --- | --- |
+| Id | Guid | same as Identity user id |
+| UserName | string(50) | login name, unique |
+| DisplayName | string(100) | editable by the astronaut |
+| CallSign | string(30)? | editable |
+| MissionId | Guid | |
+| DateOfBirth | DateOnly? | |
+| Notes | string(500)? | editable by the astronaut (allergies, preferences) |
+| UpdatedAt | DateTimeOffset | last-write-wins for profile edits |
+
+**CheckUp** (MR-13 — one session, one timestamp)
+| Field | Type | Notes |
+| --- | --- | --- |
+| Id | Guid | created on the desktop |
+| AstronautId | Guid | taken from the token on the server, never from the body |
+| RecordedAt | DateTimeOffset | when the astronaut saved it (desktop clock) |
+| ReceivedAt | DateTimeOffset? | set by the server on sync |
+| OverallStatus | HealthStatus | worst of its readings |
+| RangesVersion | string | ranges file version used |
+| Note | string(500)? | free text from the astronaut |
+| SupersedesId | Guid? | set when this check-up corrects an earlier one |
+
+**Reading** (append-only)
+| Field | Type | Notes |
+| --- | --- | --- |
+| Id | Guid | |
+| CheckUpId | Guid | |
+| Indicator | IndicatorType | |
+| Value | decimal(6,2) | systolic for blood pressure |
+| SecondaryValue | decimal(6,2)? | diastolic for blood pressure |
+| Status | HealthStatus | |
+| BandIds | string | comma-separated band IDs |
+
+A check-up may contain 1–6 readings, one per indicator. Readings are never updated or deleted. To correct a mistake, the astronaut saves a new check-up with `SupersedesId`; history and charts hide superseded check-ups. This makes sync conflict-free.
+
+**Alert** (MR-06 — created by the server for every `Critical` check-up)
+| Field | Type | Notes |
+| --- | --- | --- |
+| Id | Guid | |
+| AstronautId | Guid | |
+| CheckUpId | Guid | unique |
+| Indicators | string | indicators that were critical |
+| CreatedAt | DateTimeOffset | |
+| AcknowledgedAt | DateTimeOffset? | |
+| AcknowledgedByUserId | Guid? | |
+| AcknowledgeNote | string(500)? | |
+
+**Message** (MR-11)
+| Field | Type | Notes |
+| --- | --- | --- |
+| Id | Guid | created by the sender |
+| AstronautId | Guid | the conversation it belongs to |
+| Direction | enum | `toMissionControl`, `toAstronaut` |
+| Kind | enum | `message`, `report` (a report attaches a check-up) |
+| CheckUpId | Guid? | for `report` |
+| Subject | string(120) | |
+| Body | string(4000) | |
+| CreatedAt | DateTimeOffset | sender's clock |
+| ReceivedAt | DateTimeOffset? | set by the server |
+| ReadAt | DateTimeOffset? | |
+| SenderUserId | Guid? | portal user, for `toAstronaut` |
+
+**PortalUser** (Identity user with `AccountType = Portal`)
+| Field | Type | Notes |
+| --- | --- | --- |
+| Id | Guid | |
+| UserName / Email | string | |
+| DisplayName | string(100) | |
+| RoleId | Guid | exactly one role per user, which keeps the checklist simple |
+| IsActive | bool | disabled users cannot log in |
+
+**Role** and **RolePermission** (MR-15)
+| Field | Type | Notes |
+| --- | --- | --- |
+| Role.Id | Guid | |
+| Role.Name | string(50) | unique |
+| Role.IsSystem | bool | predefined roles cannot be deleted; Administrator cannot be edited |
+| RolePermission.RoleId | Guid | |
+| RolePermission.Permission | string(50) | one of the constants in §6 |
+
+### Desktop-only tables (SQLite)
+
+| Table | Purpose |
+| --- | --- |
+| `LocalAccount` | `AstronautId`, `UserName`, `PasswordHash` (PBKDF2-SHA256, 100k iterations, 16-byte salt), `Salt`, `LastOnlineLoginAt`, cached `ProfileJson` |
+| `CheckUp`, `Reading`, `Message` | same columns as the server, plus `SyncState` (`pending`, `synced`, `rejected`) and `SyncError` |
+| `SyncCursor` | per astronaut: `LastPulledAt` (server time from the last sync) |
+| `RangesCache` | the latest `reference-ranges.json` the server returned, with its version |
+| `TokenCache` | access and refresh tokens, protected with Windows DPAPI (`ProtectedData`, CurrentUser scope) |
+
+Every desktop query filters by the signed-in `AstronautId` (MR-12). Several astronauts can share one laptop.
+
+---
+
+## 4. Authentication
+
+### Crew (desktop)
+
+1. **First sign-in must be online.** `POST /api/crew/v1/auth/login` → tokens + profile. The desktop then hashes the password itself (PBKDF2) and stores it in `LocalAccount`. The server never sends a password hash.
+2. **Offline sign-in:** the desktop checks the password against `LocalAccount`. On success it opens the session with the cached profile, and sync waits until there is a link.
+3. **Back online:** sync uses the refresh token. If it has expired, the desktop asks for the password once and calls `login` again.
+4. Demo-grade, and the pitch says so (Risks table).
+
+### JWT claims
+
+| Claim | Crew token | MC token |
+| --- | --- | --- |
+| `sub` | astronaut id | portal user id |
+| `aud` | `heartbeat-crew` | `heartbeat-mc` |
+| `name` | display name | display name |
+| `mission` | mission id | — |
+| `perm` | — | one claim per permission |
+
+Access token 60 min, refresh token 14 days (crew) / 8 h (MC). Permissions are read from the database at login, so a role change takes effect on the next refresh (at most 60 min), and right away if the user logs in again.
+
+---
+
+## 5. Crew API — `/api/crew/v1`
+
+Every endpoint except `auth/*` requires a crew token. The astronaut ID always comes from the token (MR-12).
+
+| Method | Path | Body → Response | Req |
+| --- | --- | --- | --- |
+| POST | `/auth/login` | `LoginRequest` → `CrewLoginResponse` | MR-12 |
+| POST | `/auth/refresh` | `RefreshRequest` → `TokenResponse` | MR-12 |
+| GET | `/me` | → `AstronautProfile` | MR-12 |
+| PUT | `/me` | `UpdateProfileRequest` → `AstronautProfile` | MR-12 |
+| GET | `/reference-ranges` | → raw `reference-ranges.json` (`ETag` = version) | MR-03 |
+| POST | `/sync` | `SyncRequest` → `SyncResponse` | MR-10, MR-11 |
+| GET | `/checkups?from=&to=&page=` | → `Paged<CheckUpDto>` (restore history on a new device) | MR-14 |
+
+### Payloads
+
+```jsonc
+// POST /auth/login
+{ "userName": "a.rivera", "password": "••••••", "deviceId": "6f1c…" }
+
+// 200 CrewLoginResponse
+{
+  "accessToken": "eyJ…", "accessTokenExpiresAt": "2026-11-14T10:30:00Z",
+  "refreshToken": "q8Z…", "refreshTokenExpiresAt": "2026-11-28T09:30:00Z",
+  "profile": { /* AstronautProfile */ }
+}
+
+// AstronautProfile
+{
+  "id": "0193…", "userName": "a.rivera", "displayName": "Ana Rivera", "callSign": "Comet",
+  "mission": { "id": "0193…", "name": "Artemis Demo 1", "environment": "station", "startsAt": "2026-08-01T00:00:00Z" },
+  "dateOfBirth": "1988-03-12", "notes": null, "updatedAt": "2026-11-10T08:00:00Z"
+}
+
+// PUT /me  (only these fields are editable)
+{ "displayName": "Ana Rivera", "callSign": "Comet", "notes": "Allergic to penicillin", "updatedAt": "2026-11-14T09:00:00Z" }
+```
+
+```jsonc
+// CheckUpDto (used in sync, history and the portal)
+{
+  "id": "0193a…",
+  "recordedAt": "2026-11-14T09:30:00Z",
+  "receivedAt": null,
+  "overallStatus": "critical",
+  "rangesVersion": "2026.11.14-1",
+  "note": "Felt dizzy after exercise",
+  "supersedesId": null,
+  "readings": [
+    { "id": "0193b…", "indicator": "bloodPressure", "value": 185, "secondaryValue": 95,
+      "status": "critical", "bandIds": ["bp-sys-critical-high", "bp-dia-watch-high"] },
+    { "id": "0193c…", "indicator": "heartRate", "value": 88, "secondaryValue": null,
+      "status": "normal", "bandIds": ["hr-normal"] },
+    { "id": "0193d…", "indicator": "mood", "value": 4, "secondaryValue": null,
+      "status": "normal", "bandIds": ["mood-normal"] }
+  ]
+}
+
+// MessageDto
+{
+  "id": "0193e…", "direction": "toMissionControl", "kind": "report",
+  "checkUpId": "0193a…", "subject": "Dizzy after exercise",
+  "body": "BP high after treadmill; resting now.", "createdAt": "2026-11-14T09:32:00Z",
+  "receivedAt": null, "readAt": null, "senderName": null
+}
+```
+
+### Sync (MR-10, MR-11)
+
+One call pushes everything pending and pulls everything new. It is idempotent: sending the same ID twice is accepted and ignored.
+
+```jsonc
+// POST /sync
+{
+  "deviceId": "6f1c…",
+  "lastPulledAt": "2026-11-13T18:00:00Z",      // null on first sync
+  "rangesVersion": "2026.11.14-1",
+  "profile": null,                              // or an UpdateProfileRequest edited offline
+  "checkUps": [ /* CheckUpDto[], with receivedAt null */ ],
+  "messages": [ /* MessageDto[], direction "toMissionControl" only */ ]
+}
+
+// 200 SyncResponse
+{
+  "serverTime": "2026-11-14T09:35:00Z",        // store as the next lastPulledAt
+  "accepted": ["0193a…", "0193e…"],            // check-up and message IDs now stored
+  "rejected": [ { "id": "0193f…", "reason": "Reading value outside valid range" } ],
+  "profile": { /* AstronautProfile, if the server copy is newer */ },
+  "inbound": {
+    "messages": [ /* MessageDto[], direction "toAstronaut", created since lastPulledAt */ ],
+    "acknowledgedAlerts": [ { "checkUpId": "0193a…", "acknowledgedAt": "…", "by": "Dr. Okafor", "note": "Rest 24h, recheck" } ]
+  },
+  "rangesUpdateAvailable": false               // true → GET /reference-ranges
+}
+```
+
+Server rules:
+- Re-evaluate every check-up with the shared evaluator. If the result differs from what the desktop sent (for example older ranges), store the server's result; the desktop shows it after the next pull.
+- Create an `Alert` for every accepted check-up whose overall status is `critical`.
+- Profile edits: the newer `updatedAt` wins.
+- Accept at most 500 check-ups per call; the desktop sends them in batches, oldest first.
+- Readings are append-only, so nothing can conflict apart from the profile.
+
+Desktop rules:
+- Try to sync on start-up, after each save, and every 60 s while the link is up. Show a "last synced" time and a pending count.
+- Mark items `synced` only when their ID is in `accepted`; show `rejected` items with their reason.
+
+---
+
+## 6. Mission Control API — `/api/mc/v1`
+
+### Permissions catalog (MR-15)
+
+Constants in `Heartbeat.Shared.Permissions`. Each endpoint needs exactly the permission listed. The portal hides what the user cannot do, and the API enforces it anyway.
+
+| Permission | Allows |
+| --- | --- |
+| `crew.view` | See the crew list and profiles |
+| `crew.manage` | Create and edit astronaut accounts, reset their passwords |
+| `vitals.view` | See latest status and check-up details |
+| `vitals.history` | See past check-ups and charts |
+| `alerts.view` | See critical alerts |
+| `alerts.acknowledge` | Acknowledge an alert with a note |
+| `messages.view` | Read astronaut messages and reports |
+| `messages.send` | Reply to an astronaut |
+| `users.view` | See portal users |
+| `users.manage` | Create, edit, disable users and assign roles |
+| `roles.manage` | Create and edit roles and their permissions |
+
+### Predefined roles (proposed answer to open question 2)
+
+| Permission | Administrator | Flight Surgeon | Mission Control Operator |
+| --- | :-: | :-: | :-: |
+| crew.view | ✓ | ✓ | ✓ |
+| crew.manage | ✓ | | |
+| vitals.view | ✓ | ✓ | ✓ |
+| vitals.history | ✓ | ✓ | |
+| alerts.view | ✓ | ✓ | ✓ |
+| alerts.acknowledge | ✓ | ✓ | |
+| messages.view | ✓ | ✓ | ✓ |
+| messages.send | ✓ | ✓ | ✓ |
+| users.view | ✓ | | |
+| users.manage | ✓ | | |
+| roles.manage | ✓ | | |
+
+Admins can create custom roles by ticking any of these permissions (the checklist). Fallback if time runs short: ship these three roles with the checklist read-only.
+
+Guard rails: an admin cannot remove `users.manage` or `roles.manage` from their own role, and the last active Administrator cannot be disabled.
+
+### Endpoints
+
+| Method | Path | Permission | Body → Response | Req |
+| --- | --- | --- | --- | --- |
+| POST | `/auth/login` | — | `LoginRequest` → `McLoginResponse` | MR-15 |
+| POST | `/auth/refresh` | — | `RefreshRequest` → `TokenResponse` | |
+| GET | `/me` | any signed-in | → `PortalUserDto` with `permissions[]` | MR-15 |
+| GET | `/crew` | `crew.view` | → `CrewSummaryDto[]` (latest status per astronaut) | NR-08 |
+| GET | `/crew/{id}` | `crew.view` | → `AstronautProfile` | MR-14 |
+| POST | `/crew` | `crew.manage` | `CreateAstronautRequest` → `AstronautProfile` | |
+| PUT | `/crew/{id}` | `crew.manage` | `UpdateAstronautRequest` → `AstronautProfile` | |
+| POST | `/crew/{id}/reset-password` | `crew.manage` | `{ "newPassword": "…" }` → 204 | |
+| GET | `/crew/{id}/status` | `vitals.view` | → `AstronautStatusDto` | MR-14, MR-05 |
+| GET | `/crew/{id}/checkups?from=&to=&status=&page=` | `vitals.history` | → `Paged<CheckUpDto>` | MR-14 |
+| GET | `/crew/{id}/checkups/{checkUpId}` | `vitals.view` | → `CheckUpDto` + evaluations | MR-14 |
+| GET | `/crew/{id}/series?indicator=&from=&to=` | `vitals.history` | → `SeriesDto` | NR-02 |
+| GET | `/alerts?state=open\|acknowledged\|all&page=` | `alerts.view` | → `Paged<AlertDto>` | MR-06 |
+| POST | `/alerts/{id}/acknowledge` | `alerts.acknowledge` | `{ "note": "…" }` → `AlertDto` | MR-06 |
+| GET | `/crew/{id}/messages?page=` | `messages.view` | → `Paged<MessageDto>` | MR-11 |
+| POST | `/crew/{id}/messages` | `messages.send` | `{ "subject", "body" }` → `MessageDto` | MR-11 |
+| POST | `/messages/{id}/read` | `messages.view` | → 204 | |
+| GET | `/users?page=` | `users.view` | → `Paged<PortalUserDto>` | MR-16 |
+| POST | `/users` | `users.manage` | `CreateUserRequest` → `PortalUserDto` | MR-16 |
+| PUT | `/users/{id}` | `users.manage` | `UpdateUserRequest` → `PortalUserDto` | MR-16 |
+| PUT | `/users/{id}/role` | `users.manage` | `{ "roleId": "…" }` → `PortalUserDto` | MR-16 |
+| POST | `/users/{id}/disable` · `/enable` | `users.manage` | → 204 | MR-16 |
+| GET | `/roles` | `users.view` or `roles.manage` | → `RoleDto[]` | MR-15 |
+| POST | `/roles` | `roles.manage` | `{ "name", "permissions": [] }` → `RoleDto` | MR-15 |
+| PUT | `/roles/{id}` | `roles.manage` | `{ "name", "permissions": [] }` → `RoleDto` | MR-15 |
+| DELETE | `/roles/{id}` | `roles.manage` | → 204 (409 if system role or users still assigned) | MR-15 |
+| GET | `/permissions` | `roles.manage` | → `PermissionDto[]` (the checklist) | MR-15 |
+| GET | `/reference-ranges` | any signed-in | → raw JSON (info panels and sources) | MR-07 |
+
+### Payloads
+
+```jsonc
+// McLoginResponse
+{ "accessToken": "…", "accessTokenExpiresAt": "…", "refreshToken": "…", "refreshTokenExpiresAt": "…",
+  "user": { /* PortalUserDto */ } }
+
+// PortalUserDto
+{ "id": "…", "userName": "j.okafor", "email": "j.okafor@heartbeat.demo", "displayName": "Dr. J. Okafor",
+  "role": { "id": "…", "name": "Flight Surgeon" }, "isActive": true,
+  "permissions": ["crew.view", "vitals.view", "vitals.history", "alerts.view", "alerts.acknowledge", "messages.view", "messages.send"] }
+
+// CreateUserRequest
+{ "userName": "m.chen", "email": "m.chen@heartbeat.demo", "displayName": "M. Chen", "password": "…", "roleId": "…" }
+
+// RoleDto
+{ "id": "…", "name": "Flight Surgeon", "isSystem": true, "userCount": 2, "permissions": ["crew.view", "…"] }
+
+// PermissionDto
+{ "key": "alerts.acknowledge", "group": "Alerts", "description": "Acknowledge an alert with a note" }
+
+// CrewSummaryDto (one card per astronaut on the overview)
+{ "astronautId": "…", "displayName": "Ana Rivera", "callSign": "Comet",
+  "overallStatus": "critical", "lastCheckUpAt": "2026-11-14T09:30:00Z", "lastSyncAt": "2026-11-14T09:35:00Z",
+  "openAlerts": 1, "unreadMessages": 2 }
+
+// AstronautStatusDto (dashboard: latest value of each indicator)
+{ "astronautId": "…", "overallStatus": "critical", "lastSyncAt": "…",
+  "indicators": [
+    { "indicator": "bloodPressure", "value": 185, "secondaryValue": 95, "unit": "mmHg",
+      "status": "critical", "label": "Very high systolic", "recordedAt": "…", "checkUpId": "…" },
+    { "indicator": "sleep", "value": 5.5, "secondaryValue": null, "unit": "hours/day",
+      "status": "watch", "label": "Short", "recordedAt": "…", "checkUpId": "…" }
+  ] }
+
+// SeriesDto (charts)
+{ "indicator": "heartRate", "unit": "bpm",
+  "bands": [ { "status": "normal", "min": 50, "max": 101 } /* for shading */ ],
+  "points": [ { "t": "2026-11-12T09:00:00Z", "value": 64, "secondaryValue": null, "status": "normal" } ] }
+
+// AlertDto
+{ "id": "…", "astronautId": "…", "astronautName": "Ana Rivera", "checkUpId": "…",
+  "indicators": ["bloodPressure"], "createdAt": "…",
+  "acknowledgedAt": null, "acknowledgedBy": null, "acknowledgeNote": null }
+```
+
+---
+
+## 7. Seed data (demo)
+
+| Astronaut | Login | Story in the data (30 days, one check-up a day) |
+| --- | --- | --- |
+| Ana Rivera "Comet" | `a.rivera` | Healthy, then a blood-pressure spike to critical on day 30 → open alert + report message |
+| Kenji Sato "Atlas" | `k.sato` | Sleep slides from 7 h to 4.5 h over two weeks, mood drops to 2 → watch trend |
+| Leila Haddad "Nova" | `l.haddad` | Fever (38.4 °C → 39.2 °C) on days 18–20, then recovers → acknowledged alert |
+
+Portal users: `admin` (Administrator), `j.okafor` (Flight Surgeon), `m.chen` (Mission Control Operator). All names are fictional. Demo passwords live in `appsettings.Development.json` / the seed class, not in this file.
+
+---
+
+## 8. Requirement coverage
+
+| Req | Covered by |
+| --- | --- |
+| MR-01, MR-02 | `ReadingInput`, `Reading`, six `IndicatorType` values |
+| MR-03, MR-04 | `IHealthEvaluator` + `reference-ranges.json` bands and guidance |
+| MR-05 | `AstronautStatusDto` (portal); desktop dashboard uses `CheckUpEvaluation` |
+| MR-06 | `escalation` in the ranges file, `Alert` entity, `/alerts` endpoints |
+| MR-07 | `sources` in the ranges file, per indicator |
+| MR-09 | `/api/crew/v1` + `/api/mc/v1` in one host, one database |
+| MR-10 | Desktop SQLite tables, shared evaluator, `/sync` |
+| MR-11 | `Message` entity, sync push/pull, `/crew/{id}/messages` |
+| MR-12 | Crew auth flow, `LocalAccount`, astronaut ID from token only |
+| MR-13 | `CheckUp` with one `RecordedAt` and 1–6 readings |
+| MR-14 | `/crew/{id}/status`, `/checkups`, `/series` |
+| MR-15 | Permissions catalog, `perm` claims, one policy per permission |
+| MR-16 | `/users`, `/roles` endpoints |
+| NR-01 | `status` on every reading → green / amber / red |
+| NR-02 | `/series` + band shading |
+| NR-03 | `whyItMatters`, `howToMeasure`, `risks` in the ranges file |
+| NR-04 | `bodyRegion` per indicator (ready for the body figure) |
+| NR-08 | `/crew` → `CrewSummaryDto` |
+
+## 9. Still open
+
+- **Database engine:** SQL Server if the GoDaddy plan includes it, otherwise SQLite on the server too (EF Core makes the switch a config change). Decide with open question 3.
+- **Ranges review:** the values in `reference-ranges.json` are demo-grade, based on general adult clinical references. NASA HRP pages are cited for *why* each indicator matters in spaceflight; they do not publish thresholds. Say this in the pitch.
+- **Dead links:** all links returned HTTP 200 on Nov 14, 2026. Recheck before submission.

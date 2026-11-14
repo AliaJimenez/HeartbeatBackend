@@ -1,0 +1,203 @@
+{
+  "version": "2026.11.14-1",
+  "disclaimer": "Heartbeat supports self-assessment only. It is not a medical device and does not diagnose. Ranges are demo values for a healthy adult at rest, drawn from public clinical references; they are not flight-surgeon approved.",
+  "intervalRule": "Each band covers min <= value < max. A missing min means no lower limit; a missing max means no upper limit. Bands of one indicator never overlap and leave no gaps.",
+  "statusOrder": ["normal", "watch", "critical"],
+  "escalation": {
+    "watch": {
+      "contact": "self",
+      "message": "Recheck this indicator at your next check-up. Mission control can see this result after the next sync."
+    },
+    "critical": {
+      "contact": "crewMedicalOfficer",
+      "message": "Tell your crew medical officer now. This result is flagged for the flight surgeons on the ground and will be sent at the next sync."
+    }
+  },
+  "sources": {
+    "nasa-hazards": { "title": "5 Hazards of Human Spaceflight (NASA HRP)", "url": "https://www.nasa.gov/hrp/hazards/" },
+    "nasa-body-in-space": { "title": "The Human Body in Space (NASA)", "url": "https://www.nasa.gov/humans-in-space/the-human-body-in-space/" },
+    "nasa-hrp-risks": { "title": "Human Research Roadmap: Risks (NASA HRP)", "url": "https://humanresearchroadmap.nasa.gov/risks/" },
+    "csa-space-medicine": { "title": "Space medicine (Canadian Space Agency)", "url": "https://www.asc-csa.gc.ca/eng/astronauts/space-medicine/" },
+    "csa-radiation": { "title": "Radiation and astronaut health (Canadian Space Agency)", "url": "https://www.asc-csa.gc.ca/eng/astronauts/space-medicine/radiation.asp" },
+    "nhlbi-bp": { "title": "High Blood Pressure (NHLBI, NIH)", "url": "https://www.nhlbi.nih.gov/health/high-blood-pressure" },
+    "medline-bp-measure": { "title": "Blood pressure measurement (MedlinePlus)", "url": "https://medlineplus.gov/ency/article/007490.htm" },
+    "medline-low-bp": { "title": "Low Blood Pressure (MedlinePlus)", "url": "https://medlineplus.gov/lowbloodpressure.html" },
+    "medline-pulse": { "title": "Pulse (MedlinePlus)", "url": "https://medlineplus.gov/ency/article/003399.htm" },
+    "medline-glucose-test": { "title": "Blood sugar test (MedlinePlus)", "url": "https://medlineplus.gov/ency/article/003482.htm" },
+    "medline-low-glucose": { "title": "Low blood sugar (MedlinePlus)", "url": "https://medlineplus.gov/ency/article/000386.htm" },
+    "ada-hypoglycemia": { "title": "Hypoglycemia (American Diabetes Association)", "url": "https://diabetes.org/living-with-diabetes/hypoglycemia-low-blood-glucose" },
+    "medline-temp-norms": { "title": "Body temperature norms (MedlinePlus)", "url": "https://medlineplus.gov/ency/article/001982.htm" },
+    "medline-temp-measure": { "title": "Temperature measurement (MedlinePlus)", "url": "https://medlineplus.gov/ency/article/003400.htm" },
+    "nhlbi-sleep": { "title": "Sleep Deprivation and Deficiency (NHLBI, NIH)", "url": "https://www.nhlbi.nih.gov/health/sleep-deprivation" },
+    "nimh-mental-health": { "title": "Caring for Your Mental Health (NIMH)", "url": "https://www.nimh.nih.gov/health/topics/caring-for-your-mental-health" }
+  },
+  "indicators": [
+    {
+      "id": "bloodPressure",
+      "name": "Blood pressure",
+      "unit": "mmHg",
+      "input": "keyboard",
+      "valueKind": "pair",
+      "valueLabels": { "value": "Systolic", "secondaryValue": "Diastolic" },
+      "validRange": { "value": { "min": 50, "max": 260 }, "secondaryValue": { "min": 30, "max": 160 } },
+      "hazard": "gravityFields",
+      "bodyRegion": "heart",
+      "whyItMatters": "In microgravity, body fluids shift toward the head and the heart and blood vessels adapt. This can change blood pressure and cause dizziness or fainting when gravity returns.",
+      "howToMeasure": [
+        "Sit or strap in and rest quietly for 5 minutes first.",
+        "Put the cuff on your bare upper arm at heart level.",
+        "Do not talk or move during the reading.",
+        "Take two readings 1 minute apart and enter the second one."
+      ],
+      "risks": "Persistently high pressure strains the heart and vessels. Low pressure can cause light-headedness and fainting.",
+      "sources": ["nasa-hazards", "nasa-body-in-space", "nhlbi-bp", "medline-bp-measure", "medline-low-bp"],
+      "evaluation": "worstOfComponents",
+      "components": {
+        "value": [
+          { "id": "bp-sys-critical-low", "status": "critical", "max": 80, "label": "Very low systolic", "guidance": ["Lie down with your legs restrained and raised if you can.", "Drink fluids if you are able to.", "Tell your crew medical officer now."] },
+          { "id": "bp-sys-watch-low", "status": "watch", "min": 80, "max": 90, "label": "Low systolic", "guidance": ["Drink water and recheck in 30 minutes.", "Move slowly and avoid sudden position changes."] },
+          { "id": "bp-sys-normal", "status": "normal", "min": 90, "max": 130, "label": "Normal systolic", "guidance": ["Keep up your exercise countermeasures and hydration."] },
+          { "id": "bp-sys-watch-high", "status": "watch", "min": 130, "max": 180, "label": "High systolic", "guidance": ["Rest for 10 minutes and measure again.", "Limit salt in your next meals.", "Check that you are doing your scheduled exercise."] },
+          { "id": "bp-sys-critical-high", "status": "critical", "min": 180, "label": "Very high systolic", "guidance": ["Stop any exercise and rest.", "Measure again in 5 minutes.", "Tell your crew medical officer now, especially with headache, chest pain or vision changes."] }
+        ],
+        "secondaryValue": [
+          { "id": "bp-dia-critical-low", "status": "critical", "max": 50, "label": "Very low diastolic", "guidance": ["Lie down, drink fluids if able, and tell your crew medical officer now."] },
+          { "id": "bp-dia-watch-low", "status": "watch", "min": 50, "max": 60, "label": "Low diastolic", "guidance": ["Drink water and recheck in 30 minutes."] },
+          { "id": "bp-dia-normal", "status": "normal", "min": 60, "max": 80, "label": "Normal diastolic", "guidance": ["No action needed."] },
+          { "id": "bp-dia-watch-high", "status": "watch", "min": 80, "max": 120, "label": "High diastolic", "guidance": ["Rest for 10 minutes and measure again.", "Limit salt in your next meals."] },
+          { "id": "bp-dia-critical-high", "status": "critical", "min": 120, "label": "Very high diastolic", "guidance": ["Stop any exercise, rest, and tell your crew medical officer now."] }
+        ]
+      }
+    },
+    {
+      "id": "heartRate",
+      "name": "Heart rate",
+      "unit": "bpm",
+      "input": "keyboard",
+      "valueKind": "single",
+      "validRange": { "value": { "min": 20, "max": 250 } },
+      "hazard": "gravityFields",
+      "bodyRegion": "heart",
+      "whyItMatters": "Without gravity the heart works less and can lose conditioning. Changes in resting heart rate can show deconditioning, stress, fever or dehydration.",
+      "howToMeasure": [
+        "Rest for 5 minutes before measuring.",
+        "Use the pulse sensor, or count your wrist pulse for 30 seconds and multiply by 2.",
+        "Do not measure right after exercise."
+      ],
+      "risks": "A very slow or very fast resting pulse can mean a heart rhythm problem, dehydration or infection.",
+      "sources": ["nasa-hazards", "nasa-body-in-space", "medline-pulse"],
+      "evaluation": "bands",
+      "bands": [
+        { "id": "hr-critical-low", "status": "critical", "max": 40, "label": "Very slow", "guidance": ["Recheck now while resting.", "If you feel dizzy, faint or short of breath, tell your crew medical officer now."] },
+        { "id": "hr-watch-low", "status": "watch", "min": 40, "max": 50, "label": "Slow", "guidance": ["Fit astronauts can rest below 50; recheck at your next check-up.", "Note any dizziness or tiredness."] },
+        { "id": "hr-normal", "status": "normal", "min": 50, "max": 101, "label": "Normal", "guidance": ["Keep up your exercise countermeasures."] },
+        { "id": "hr-watch-high", "status": "watch", "min": 101, "max": 121, "label": "Fast", "guidance": ["Rest for 10 minutes and measure again.", "Drink water; check your temperature for fever.", "Avoid caffeine until it settles."] },
+        { "id": "hr-critical-high", "status": "critical", "min": 121, "label": "Very fast", "guidance": ["Stop all activity and rest.", "Tell your crew medical officer now, especially with chest pain or palpitations."] }
+      ]
+    },
+    {
+      "id": "bloodSugar",
+      "name": "Blood sugar",
+      "unit": "mg/dL",
+      "input": "keyboard",
+      "valueKind": "single",
+      "validRange": { "value": { "min": 10, "max": 600 } },
+      "hazard": "hostileClosedEnvironment",
+      "bodyRegion": "abdomen",
+      "whyItMatters": "Limited food choices, stress and inactivity in a closed habitat can change how the body handles sugar. Low sugar affects alertness, which matters for safety-critical tasks.",
+      "howToMeasure": [
+        "Wash and dry your hands.",
+        "Prick the side of a fingertip with the lancet and put the drop on the test strip.",
+        "Note whether you ate in the last 2 hours; fasting values are most reliable."
+      ],
+      "risks": "Low sugar can cause shakiness, confusion and fainting. High sugar over time harms vessels and nerves.",
+      "sources": ["nasa-hazards", "nasa-hrp-risks", "medline-glucose-test", "medline-low-glucose", "ada-hypoglycemia"],
+      "evaluation": "bands",
+      "bands": [
+        { "id": "bg-critical-low", "status": "critical", "max": 54, "label": "Very low", "guidance": ["Eat or drink 15 g of fast sugar now (juice, glucose gel).", "Recheck in 15 minutes and repeat if still low.", "Tell your crew medical officer now."] },
+        { "id": "bg-watch-low", "status": "watch", "min": 54, "max": 70, "label": "Low", "guidance": ["Eat 15 g of fast sugar and recheck in 15 minutes.", "Do not skip planned meals."] },
+        { "id": "bg-normal", "status": "normal", "min": 70, "max": 141, "label": "Normal", "guidance": ["Keep regular meal times."] },
+        { "id": "bg-watch-high", "status": "watch", "min": 141, "max": 251, "label": "High", "guidance": ["Recheck fasting before your next meal.", "Choose fewer sugary items from the menu.", "Drink water."] },
+        { "id": "bg-critical-high", "status": "critical", "min": 251, "label": "Very high", "guidance": ["Drink water and recheck now.", "Tell your crew medical officer now, especially with thirst, nausea or confusion."] }
+      ]
+    },
+    {
+      "id": "bodyTemperature",
+      "name": "Body temperature",
+      "unit": "°C",
+      "input": "keyboard",
+      "valueKind": "single",
+      "decimals": 1,
+      "validRange": { "value": { "min": 30, "max": 44 } },
+      "hazard": "hostileClosedEnvironment",
+      "bodyRegion": "head",
+      "whyItMatters": "The immune system changes in spaceflight, and germs spread easily in a closed habitat. Fever is often the first sign of infection.",
+      "howToMeasure": [
+        "Wait 15 minutes after eating, drinking or exercise.",
+        "Place the thermometer under your tongue with your mouth closed until it beeps.",
+        "Enter the value with one decimal, in °C."
+      ],
+      "risks": "Fever suggests infection; a low temperature can mean hypothermia or a bad reading.",
+      "sources": ["nasa-hazards", "csa-space-medicine", "medline-temp-norms", "medline-temp-measure"],
+      "evaluation": "bands",
+      "bands": [
+        { "id": "temp-critical-low", "status": "critical", "max": 35.0, "label": "Very low", "guidance": ["Measure again to rule out a bad reading.", "Warm up with extra layers.", "Tell your crew medical officer now if it stays low."] },
+        { "id": "temp-watch-low", "status": "watch", "min": 35.0, "max": 36.1, "label": "Low", "guidance": ["Measure again in 30 minutes.", "Add a layer of clothing."] },
+        { "id": "temp-normal", "status": "normal", "min": 36.1, "max": 37.6, "label": "Normal", "guidance": ["No action needed."] },
+        { "id": "temp-watch-high", "status": "watch", "min": 37.6, "max": 39.0, "label": "Fever", "guidance": ["Rest and drink fluids.", "Wash hands and limit close contact with crewmates.", "Measure again in 4 hours."] },
+        { "id": "temp-critical-high", "status": "critical", "min": 39.0, "label": "High fever", "guidance": ["Rest, drink fluids and isolate where possible.", "Tell your crew medical officer now."] }
+      ]
+    },
+    {
+      "id": "sleep",
+      "name": "Sleep",
+      "unit": "hours/day",
+      "input": "keyboardOrSlider",
+      "valueKind": "single",
+      "decimals": 1,
+      "sliderStep": 0.5,
+      "validRange": { "value": { "min": 0, "max": 24 } },
+      "hazard": "isolationAndConfinement",
+      "bodyRegion": "head",
+      "whyItMatters": "Noise, light, shifted schedules and 16 sunrises a day in orbit disrupt sleep. Too little sleep hurts mood, attention and the ability to do safe work.",
+      "howToMeasure": [
+        "Enter the total hours you slept in the last 24 hours, including naps.",
+        "Use the sleep log or wearable if you have one; otherwise estimate."
+      ],
+      "risks": "Ongoing short sleep raises the chance of errors, low mood and weaker immunity.",
+      "sources": ["nasa-hazards", "nasa-hrp-risks", "nhlbi-sleep"],
+      "evaluation": "bands",
+      "bands": [
+        { "id": "sleep-critical-low", "status": "critical", "max": 4, "label": "Severely short", "guidance": ["Avoid safety-critical tasks until you have rested if the schedule allows.", "Tell your crew medical officer so the schedule can be adjusted."] },
+        { "id": "sleep-watch-low", "status": "watch", "min": 4, "max": 6, "label": "Short", "guidance": ["Plan a nap if the schedule allows.", "Dim lights and screens an hour before your sleep period.", "Avoid caffeine in the 6 hours before sleep."] },
+        { "id": "sleep-normal", "status": "normal", "min": 6, "max": 9.5, "label": "Normal", "guidance": ["Keep a regular sleep period."] },
+        { "id": "sleep-watch-high", "status": "watch", "min": 9.5, "label": "Long", "guidance": ["Long sleep can be a sign of illness or low mood; check your temperature and mood."] }
+      ]
+    },
+    {
+      "id": "mood",
+      "name": "Mood",
+      "unit": "1–5",
+      "input": "clicks",
+      "valueKind": "single",
+      "decimals": 0,
+      "validRange": { "value": { "min": 1, "max": 5 } },
+      "scaleLabels": { "1": "Very bad", "2": "Bad", "3": "Okay", "4": "Good", "5": "Very good" },
+      "hazard": "isolationAndConfinement",
+      "bodyRegion": "head",
+      "whyItMatters": "Months of isolation, confinement and distance from family affect behavioral health. Noticing low mood early helps prevent bigger problems.",
+      "howToMeasure": [
+        "Think about how you have felt overall today.",
+        "Click the face that fits best. There is no wrong answer."
+      ],
+      "risks": "Low mood that lasts can affect sleep, teamwork and performance.",
+      "sources": ["nasa-hazards", "nasa-hrp-risks", "nimh-mental-health"],
+      "evaluation": "bands",
+      "bands": [
+        { "id": "mood-critical", "status": "critical", "max": 2, "label": "Very bad", "guidance": ["You do not have to handle this alone; talk to a crewmate or your crew medical officer today.", "Ask for a private conference with the flight psychologist."] },
+        { "id": "mood-watch", "status": "watch", "min": 2, "max": 3, "label": "Bad", "guidance": ["Take a short break, exercise, or call family at the next opportunity.", "If it lasts more than 2 days, talk to your crew medical officer."] },
+        { "id": "mood-normal", "status": "normal", "min": 3, "label": "Okay to very good", "guidance": ["Keep up the routines that help you."] }
+      ]
+    }
+  ]
+}
