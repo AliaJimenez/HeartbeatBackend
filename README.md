@@ -1,4 +1,4 @@
-﻿# Heartbeat
+# Heartbeat
 
 NASA Space Apps 2026 — astronaut self-assessment and Mission Control platform.
 
