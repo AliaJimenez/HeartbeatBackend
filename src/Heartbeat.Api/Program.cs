@@ -3,6 +3,7 @@ using Heartbeat.Api.Auth;
 using Heartbeat.Api.Crew;
 using Heartbeat.Api.Data;
 using Heartbeat.Api.Data.Entities;
+using Heartbeat.Api.Data.Seeding;
 using Heartbeat.Api.Deployment;
 using Heartbeat.Api.Roles;
 using Heartbeat.Api.Users;
@@ -23,6 +24,7 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
 
 builder.Services.AddSingleton<Heartbeat.Api.Vitals.RangesCatalog>();
+builder.Services.AddScoped<IDataSeeder, DemoDataSeeder>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(DeploymentSettings.ResolveSqliteConnectionString(
