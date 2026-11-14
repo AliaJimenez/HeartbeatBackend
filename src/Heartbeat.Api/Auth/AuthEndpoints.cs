@@ -1,6 +1,7 @@
 using Heartbeat.Api.Auth;
 using Heartbeat.Api.Data;
 using Heartbeat.Api.Data.Entities;
+using System.Security.Claims;
 using Heartbeat.Shared;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,8 @@ namespace Heartbeat.Api.Auth;
 
 public static class AuthEndpoints
 {
+    private static readonly TimeSpan McRefreshLifetime = TimeSpan.FromHours(8);
+
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         var crew = app.MapGroup("/api/crew/v1/auth");
@@ -18,6 +21,9 @@ public static class AuthEndpoints
         var mc = app.MapGroup("/api/mc/v1/auth");
         mc.MapPost("/login", McLoginAsync);
         mc.MapPost("/refresh", McRefreshAsync);
+
+        // Any signed-in portal user (CONTRACTS.md §6); no specific permission needed.
+        app.MapGroup("/api/mc/v1").MapGet("/me", McMeAsync).RequireAuthorization(AuthConstants.McPolicy);
 
         return app;
     }
@@ -97,53 +103,98 @@ public static class AuthEndpoints
             return Results.Problem(title: "Invalid credentials", statusCode: StatusCodes.Status401Unauthorized);
         }
 
-        var portalUser = await db.PortalUsers
-            .Include(p => p.Role)
-            .ThenInclude(r => r.Permissions)
-            .FirstOrDefaultAsync(p => p.Id == user.Id, cancellationToken);
-
-        if (portalUser is null || !portalUser.IsActive)
+        // Permissions always come from the role stored in the database (CONTRACTS.md §4).
+        var dto = await LoadPortalUserAsync(db, user.Id, cancellationToken);
+        if (dto is null || !dto.IsActive)
         {
             return Results.Problem(title: "Portal user not found or disabled", statusCode: StatusCodes.Status403Forbidden);
         }
 
-        var permissions = portalUser.Role.Permissions.Select(rp => rp.Permission).ToList();
-        var dto = new PortalUserDto(
-            portalUser.Id,
-            portalUser.UserName,
-            portalUser.Email,
-            portalUser.DisplayName,
-            new RoleDto(portalUser.Role.Id, portalUser.Role.Name, portalUser.Role.IsSystem, portalUser.Role.Users.Count, permissions),
-            portalUser.IsActive,
-            permissions);
-
-        var accessToken = jwt.CreateAccessToken(user.Id, portalUser.DisplayName, "heartbeat-mc", permissions: permissions);
-        var refreshToken = jwt.CreateRefreshToken(user.Id, "heartbeat-mc", TimeSpan.FromHours(8));
+        var accessToken = jwt.CreateAccessToken(user.Id, dto.DisplayName, AuthConstants.McAudience, permissions: dto.Permissions);
+        var refreshToken = jwt.CreateRefreshToken(user.Id, AuthConstants.McAudience, McRefreshLifetime);
 
         return Results.Ok(new McLoginResponse(
             accessToken,
             DateTimeOffset.UtcNow.AddMinutes(60),
             refreshToken,
-            DateTimeOffset.UtcNow.AddHours(8),
+            DateTimeOffset.UtcNow.Add(McRefreshLifetime),
             dto));
     }
 
     private static async Task<IResult> McRefreshAsync(
         RefreshRequest request,
+        AppDbContext db,
         JwtTokenService jwt,
         CancellationToken cancellationToken)
     {
-        var principal = jwt.ValidateRefreshToken(request.RefreshToken, "heartbeat-mc");
-        if (principal is null)
+        var principal = jwt.ValidateRefreshToken(request.RefreshToken, AuthConstants.McAudience);
+        if (principal is null || !Guid.TryParse(principal.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value, out var userId))
         {
             return Results.Problem(title: "Invalid refresh token", statusCode: StatusCodes.Status401Unauthorized);
         }
 
-        var userId = Guid.Parse(principal.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value ?? throw new InvalidOperationException());
-        var accessToken = jwt.CreateAccessToken(userId, principal.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Name)?.Value ?? string.Empty, "heartbeat-mc");
-        var refreshToken = jwt.CreateRefreshToken(userId, "heartbeat-mc", TimeSpan.FromHours(8));
+        // Re-read the role so permission changes apply on refresh, and disabled users cannot keep a session.
+        var dto = await LoadPortalUserAsync(db, userId, cancellationToken);
+        if (dto is null || !dto.IsActive)
+        {
+            return Results.Problem(title: "Invalid refresh token", statusCode: StatusCodes.Status401Unauthorized);
+        }
 
-        return Results.Ok(new TokenResponse(accessToken, DateTimeOffset.UtcNow.AddMinutes(60), refreshToken, DateTimeOffset.UtcNow.AddHours(8)));
+        var accessToken = jwt.CreateAccessToken(userId, dto.DisplayName, AuthConstants.McAudience, permissions: dto.Permissions);
+        var refreshToken = jwt.CreateRefreshToken(userId, AuthConstants.McAudience, McRefreshLifetime);
+
+        return Results.Ok(new TokenResponse(accessToken, DateTimeOffset.UtcNow.AddMinutes(60), refreshToken, DateTimeOffset.UtcNow.Add(McRefreshLifetime)));
+    }
+
+    private static async Task<IResult> McMeAsync(
+        ClaimsPrincipal caller,
+        AppDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(caller.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value, out var userId))
+        {
+            return Results.Problem(title: "Invalid token", statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        var dto = await LoadPortalUserAsync(db, userId, cancellationToken);
+        if (dto is null || !dto.IsActive)
+        {
+            return Results.Problem(title: "Portal user not found or disabled", statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        return Results.Ok(dto);
+    }
+
+    private static async Task<PortalUserDto?> LoadPortalUserAsync(AppDbContext db, Guid userId, CancellationToken cancellationToken)
+    {
+        var portalUser = await db.PortalUsers
+            .AsNoTracking()
+            .Include(p => p.Role)
+            .ThenInclude(r => r.Permissions)
+            .FirstOrDefaultAsync(p => p.Id == userId, cancellationToken);
+
+        if (portalUser is null)
+        {
+            return null;
+        }
+
+        var permissions = portalUser.Role.Permissions
+            .Select(rp => rp.Permission)
+            .Where(p => Permissions.All.Contains(p))
+            .Distinct()
+            .Order()
+            .ToList();
+
+        var userCount = await db.PortalUsers.CountAsync(p => p.RoleId == portalUser.RoleId, cancellationToken);
+
+        return new PortalUserDto(
+            portalUser.Id,
+            portalUser.UserName,
+            portalUser.Email,
+            portalUser.DisplayName,
+            new RoleDto(portalUser.Role.Id, portalUser.Role.Name, portalUser.Role.IsSystem, userCount, permissions),
+            portalUser.IsActive,
+            permissions);
     }
 
     private static AstronautProfile ToProfile(Astronaut astronaut)
@@ -158,4 +209,4 @@ public static class AuthEndpoints
             astronaut.Notes,
             astronaut.UpdatedAt);
     }
-}
+}
