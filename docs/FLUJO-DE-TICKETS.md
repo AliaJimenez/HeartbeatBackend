@@ -12,6 +12,36 @@ Cómo trabajamos los 5 con el GitHub Project **Heartbeat · NASA Space Apps 2026
 | @MontserratNunez | Backend | Mission Control API, permisos, hosting, despliegue, pitch |
 | @andujarsky-lang | Data → Backend | Shared, base de datos, seed. **Al terminar todo lo de `area:data`** pasa a tickets de backend (`MSG-BACKEND`, `MC-SERIES`) |
 
+## Repos
+
+| Repo | Contenido |
+| --- | --- |
+| [`AliaJimenez/HeartbeatBackend`](https://github.com/AliaJimenez/HeartbeatBackend) | API, `Heartbeat.Shared`, `Heartbeat.Client`, contratos y **todos los tickets** |
+| Repo del escritorio (WPF) | App de los astronautas |
+| Repo del portal (Blazor) | Portal de control de misión |
+
+**Todos los tickets viven en `HeartbeatBackend`**, también los de frontend. Así el Project y el bot de dependencias funcionan desde un solo lugar.
+
+- Desde un PR en otro repo, el ticket se cierra con la referencia completa: `Closes AliaJimenez/HeartbeatBackend#27`. El ticket se cierra cuando el PR se fusiona en la rama por defecto de ese repo.
+- Para enlazar commits sin cerrar: `Refs AliaJimenez/HeartbeatBackend#27`.
+
+### Código compartido (submódulo)
+
+Los frontends usan `Heartbeat.Shared` (y el escritorio también `Heartbeat.Client`) como submódulo:
+
+```bash
+git submodule add https://github.com/AliaJimenez/HeartbeatBackend.git external/HeartbeatBackend
+```
+
+```xml
+<ProjectReference Include="..\..\external\HeartbeatBackend\src\Heartbeat.Shared\Heartbeat.Shared.csproj" />
+```
+
+- Clonar con submódulos: `git clone --recurse-submodules <url>`. Si ya clonaste, ejecuta `git submodule update --init`.
+- Para traer cambios nuevos de Shared: `git submodule update --remote external/HeartbeatBackend` y haz commit del puntero actualizado.
+- En GitHub Actions: `actions/checkout` con `submodules: recursive`.
+- **No edites Shared desde el submódulo.** Los cambios a Shared van como PR en `HeartbeatBackend`.
+
 ## Etiquetas
 
 | Etiqueta | Significado |

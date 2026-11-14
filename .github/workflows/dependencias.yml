@@ -73,7 +73,8 @@ jobs:
                 { owner, repo, issue_number: n, per_page: 100 });
             }
 
-            async function refresh(n) {
+            // notify=false cuando el issue se acaba de abrir: sus relaciones aún pueden no existir.
+            async function refresh(n, notify = true) {
               const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: n });
               if (issue.pull_request) return;
               const labels = issue.labels.map(l => typeof l === 'string' ? l : l.name);
@@ -92,7 +93,7 @@ jobs:
                 const wasBlocked = has(BLOCKED);
                 await remove(BLOCKED); await add(READY);
                 await setProjectStatus(n, false);
-                if (wasBlocked) {
+                if (wasBlocked && notify) {
                   const who = issue.assignees.map(a => '@' + a.login).join(' ') || 'El equipo';
                   await github.rest.issues.createComment({ owner, repo, issue_number: n,
                     body: `🔓 **Desbloqueado.** Todas sus dependencias están cerradas. ${who} ya puede empezar.` });
@@ -103,7 +104,7 @@ jobs:
 
             if (context.eventName === 'issues') {
               const n = context.payload.issue.number;
-              await refresh(n);
+              await refresh(n, context.payload.action !== 'opened');
               if (['closed', 'reopened'].includes(context.payload.action)) {
                 for (const d of await deps(n, 'blocking')) await refresh(d.number);
               }
