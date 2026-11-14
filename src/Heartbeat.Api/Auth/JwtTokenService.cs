@@ -10,10 +10,10 @@ public sealed class JwtTokenService
     private readonly string _issuer;
     private readonly byte[] _key;
 
-    public JwtTokenService(IConfiguration configuration)
+    public JwtTokenService(IConfiguration configuration, IHostEnvironment environment)
     {
         _issuer = configuration["Jwt:Issuer"] ?? "Heartbeat";
-        var key = configuration["Jwt:Key"] ?? "dev-only-signing-key-change-me-please-32chars";
+        var key = Heartbeat.Api.Deployment.DeploymentSettings.ResolveJwtKey(configuration, environment);
         _key = Encoding.UTF8.GetBytes(key);
     }
 

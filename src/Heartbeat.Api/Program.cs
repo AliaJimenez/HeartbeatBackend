@@ -3,6 +3,7 @@ using Heartbeat.Api.Auth;
 using Heartbeat.Api.Crew;
 using Heartbeat.Api.Data;
 using Heartbeat.Api.Data.Entities;
+using Heartbeat.Api.Deployment;
 using Heartbeat.Api.Roles;
 using Heartbeat.Api.Users;
 using Heartbeat.Api.Vitals;
@@ -24,7 +25,8 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 builder.Services.AddSingleton<Heartbeat.Api.Vitals.RangesCatalog>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlite(DeploymentSettings.ResolveSqliteConnectionString(
+        builder.Configuration.GetConnectionString("DefaultConnection"), builder.Environment.ContentRootPath)));
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
 {
@@ -36,7 +38,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
 })
 .AddEntityFrameworkStores<AppDbContext>();
 
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "dev-only-signing-key-change-me-please-32chars";
+var jwtKey = DeploymentSettings.ResolveJwtKey(builder.Configuration, builder.Environment);
 // AddIdentity registers cookie auth as the default scheme; the APIs are bearer-only, so override all defaults
 // (otherwise tokens are never read and anonymous calls get redirected to /Account/Login instead of a 401).
 builder.Services.AddAuthentication(options =>
@@ -79,6 +81,15 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+
+    // Demo data is opt-in per environment (Seed__Enabled=true) and lives in IDataSeeder implementations (#10).
+    if (app.Configuration.GetValue<bool>("Seed:Enabled"))
+    {
+        foreach (var seeder in scope.ServiceProvider.GetServices<IDataSeeder>())
+        {
+            await seeder.SeedAsync(scope.ServiceProvider, CancellationToken.None);
+        }
+    }
 }
 
 if (app.Environment.IsDevelopment())
@@ -86,9 +97,20 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Anonymous smoke test for the deployment: confirms the app is up and the database is reachable.
+app.MapGet("/health", async (AppDbContext db, CancellationToken ct) =>
+    await db.Database.CanConnectAsync(ct)
+        ? Results.Ok(new { status = "ok", rangesVersion = Heartbeat.Shared.ReferenceRanges.Version })
+        : Results.Problem(title: "Database unavailable", statusCode: StatusCodes.Status503ServiceUnavailable));
 
 app.MapAuthEndpoints();
 app.MapMcCrewEndpoints();
