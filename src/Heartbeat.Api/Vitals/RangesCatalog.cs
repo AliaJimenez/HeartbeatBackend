@@ -11,7 +11,11 @@ public sealed class RangesCatalog
 {
     private sealed record Band(string Id, HealthStatus Status, string Label, IReadOnlyList<string> Guidance);
 
-    private sealed record IndicatorInfo(string Unit, IReadOnlyList<SourceLink> Sources, Dictionary<string, Band> Bands);
+    private sealed record IndicatorInfo(
+        string Unit,
+        IReadOnlyList<SourceLink> Sources,
+        Dictionary<string, Band> Bands,
+        IReadOnlyList<SeriesBandDto> PrimaryBands);
 
     private readonly Dictionary<IndicatorType, IndicatorInfo> _indicators = new();
     private readonly Dictionary<HealthStatus, Escalation> _escalations = new();
@@ -43,16 +47,26 @@ public sealed class RangesCatalog
         {
             var type = Enum.Parse<IndicatorType>(ind.GetProperty("id").GetString()!, ignoreCase: true);
             var bands = new Dictionary<string, Band>();
+            var primaryBands = new List<SeriesBandDto>();
 
             // Single-value indicators have "bands"; blood pressure has "components" (systolic/diastolic).
+            // The first group is the primary value (the one charts shade against).
             var groups = ind.TryGetProperty("bands", out var flat)
                 ? [flat]
                 : ind.GetProperty("components").EnumerateObject().Select(p => p.Value).ToList();
 
-            foreach (var group in groups)
+            for (var groupIndex = 0; groupIndex < groups.Count; groupIndex++)
             {
-                foreach (var b in group.EnumerateArray())
+                foreach (var b in groups[groupIndex].EnumerateArray())
                 {
+                    if (groupIndex == 0)
+                    {
+                        primaryBands.Add(new SeriesBandDto(
+                            Enum.Parse<HealthStatus>(b.GetProperty("status").GetString()!, ignoreCase: true),
+                            b.TryGetProperty("min", out var min) ? min.GetDecimal() : null,
+                            b.TryGetProperty("max", out var max) ? max.GetDecimal() : null));
+                    }
+
                     var id = b.GetProperty("id").GetString()!;
                     bands[id] = new Band(
                         id,
@@ -68,11 +82,15 @@ public sealed class RangesCatalog
                 .Select(s => sources[s])
                 .ToList();
 
-            _indicators[type] = new IndicatorInfo(ind.GetProperty("unit").GetString()!, links, bands);
+            _indicators[type] = new IndicatorInfo(ind.GetProperty("unit").GetString()!, links, bands, primaryBands);
         }
     }
 
     public string UnitFor(IndicatorType indicator) => _indicators.TryGetValue(indicator, out var i) ? i.Unit : string.Empty;
+
+    /// <summary>Bands of the indicator's primary value (systolic for blood pressure), in ascending order, for chart shading.</summary>
+    public IReadOnlyList<SeriesBandDto> BandsFor(IndicatorType indicator)
+        => _indicators.TryGetValue(indicator, out var i) ? i.PrimaryBands : [];
 
     /// <summary>Label of the worst band among the reading's band IDs (the first one when tied).</summary>
     public string LabelFor(IndicatorType indicator, IEnumerable<string> bandIds)
