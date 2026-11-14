@@ -1,10 +1,11 @@
-﻿name: CI
+name: CI
 
+# Todo el trabajo va a `dev` (ver docs/FLUJO-DE-TICKETS.md); `main` solo se actualiza para entregas.
 on:
   pull_request:
-    branches: [main]
+    branches: [dev]
   push:
-    branches: [main]
+    branches: [dev]
 
 jobs:
   build-and-test:
@@ -21,3 +22,20 @@ jobs:
         run: dotnet build Heartbeat.sln --configuration Release --no-restore
       - name: Test
         run: dotnet test Heartbeat.sln --configuration Release --no-build --verbosity normal
+
+  # Paquete listo para subir al hosting (docs/DESPLIEGUE.md). No contiene secretos ni base de datos.
+  publish-api:
+    if: github.event_name == 'push'
+    needs: build-and-test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish API
+        run: dotnet publish src/Heartbeat.Api/Heartbeat.Api.csproj --configuration Release --output publish/api
+      - uses: actions/upload-artifact@v4
+        with:
+          name: heartbeat-api
+          path: publish/api

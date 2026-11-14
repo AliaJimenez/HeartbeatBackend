@@ -37,6 +37,10 @@ dotnet run --project src/Heartbeat.Api/Heartbeat.Api.csproj
 dotnet test Heartbeat.sln
 ```
 
+## Deploy
+
+See [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md): secrets via environment variables, SQLite on IIS, seed switch and smoke test.
+
 ## Contracts
 
 Shared data model and API contracts live in [contracts/](contracts). The `reference-ranges.json` file is embedded into `Heartbeat.Shared`.
