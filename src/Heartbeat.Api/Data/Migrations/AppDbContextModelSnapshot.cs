@@ -311,11 +311,18 @@ namespace Heartbeat.Api.Data.Migrations
                     b.Property<Guid>("CheckUpId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("DeviceId")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Indicator")
                         .HasColumnType("INTEGER");
 
                     b.Property<decimal?>("SecondaryValue")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER");

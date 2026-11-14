@@ -163,6 +163,11 @@ public static class CrewEndpoints
                 errors.AddRange(evaluator.Validate(input));
             }
 
+            if (checkUpDto.Readings.Any(r => r.DeviceId is { Length: > Reading.DeviceIdMaxLength }))
+            {
+                errors.Add($"Reading deviceId is longer than {Reading.DeviceIdMaxLength} characters");
+            }
+
             if (errors.Count > 0)
             {
                 rejected.Add(new SyncRejected(checkUpDto.Id, errors[0]));
@@ -195,6 +200,8 @@ public static class CrewEndpoints
                     SecondaryValue = inputs[i].SecondaryValue,
                     Status = readingEval.Status,
                     BandIds = string.Join(",", readingEval.BandIds),
+                    Source = readingDto?.Source ?? ReadingSource.Manual,
+                    DeviceId = string.IsNullOrWhiteSpace(readingDto?.DeviceId) ? null : readingDto.DeviceId.Trim(),
                 });
             }
 
@@ -239,14 +246,11 @@ public static class CrewEndpoints
         var inboundMessagesQuery = db.Messages
             .Where(m => m.AstronautId == userId.Value && m.Direction == MessageDirection.ToAstronaut);
 
-        if (lastPulled.HasValue)
-        {
-            inboundMessagesQuery = inboundMessagesQuery.Where(m => m.CreatedAt > lastPulled.Value || m.ReceivedAt == null);
-        }
-
-        var inboundMessagesEntities = await inboundMessagesQuery
+        // SQLite cannot compare or ORDER BY a DateTimeOffset, so filter and order in memory.
+        var inboundMessagesEntities = (await inboundMessagesQuery.ToListAsync(cancellationToken))
+            .Where(m => !lastPulled.HasValue || m.CreatedAt > lastPulled.Value || m.ReceivedAt == null)
             .OrderBy(m => m.CreatedAt)
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         foreach (var message in inboundMessagesEntities)
         {
@@ -271,12 +275,9 @@ public static class CrewEndpoints
         var acknowledgedQuery = db.Alerts
             .Where(a => a.AstronautId == userId.Value && a.AcknowledgedAt != null);
 
-        if (lastPulled.HasValue)
-        {
-            acknowledgedQuery = acknowledgedQuery.Where(a => a.AcknowledgedAt > lastPulled.Value);
-        }
-
-        var acknowledgedAlertsEntities = await acknowledgedQuery.ToListAsync(cancellationToken);
+        var acknowledgedAlertsEntities = (await acknowledgedQuery.ToListAsync(cancellationToken))
+            .Where(a => !lastPulled.HasValue || a.AcknowledgedAt > lastPulled.Value)
+            .ToList();
         var acknowledgedAlerts = acknowledgedAlertsEntities.Select(a => new AcknowledgedAlert(
             a.CheckUpId,
             a.AcknowledgedAt!.Value,
@@ -324,24 +325,21 @@ public static class CrewEndpoints
             .AsNoTracking()
             .Where(c => c.AstronautId == userId.Value && !supersededIds.Contains(c.Id));
 
-        if (from.HasValue)
-        {
-            query = query.Where(c => c.RecordedAt >= from.Value);
-        }
-
-        if (to.HasValue)
-        {
-            query = query.Where(c => c.RecordedAt <= to.Value);
-        }
-
-        var total = await query.CountAsync(cancellationToken);
-
-        var items = await query
+        // SQLite cannot compare or ORDER BY a DateTimeOffset: filter, order and page the (small) id list in memory,
+        // then load only that page.
+        var ordered = (await query.Select(c => new { c.Id, c.RecordedAt }).ToListAsync(cancellationToken))
+            .Where(c => (!from.HasValue || c.RecordedAt >= from.Value) && (!to.HasValue || c.RecordedAt <= to.Value))
             .OrderByDescending(c => c.RecordedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+            .ToList();
+        var total = ordered.Count;
+        var pageIds = ordered.Skip((page - 1) * pageSize).Take(pageSize).Select(c => c.Id).ToList();
+
+        var loaded = await db.CheckUps
+            .AsNoTracking()
             .Include(c => c.Readings)
+            .Where(c => pageIds.Contains(c.Id))
             .ToListAsync(cancellationToken);
+        var items = pageIds.Select(id => loaded.Single(c => c.Id == id)).ToList();
 
         var dtoItems = items.Select(ToCheckUpDto).ToList();
 
@@ -364,7 +362,9 @@ public static class CrewEndpoints
                 r.Value,
                 r.SecondaryValue,
                 r.Status,
-                r.BandIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList())).ToList());
+                r.BandIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+                r.Source,
+                r.DeviceId)).ToList());
     }
 
     private static AstronautProfile ToProfile(Astronaut astronaut)
