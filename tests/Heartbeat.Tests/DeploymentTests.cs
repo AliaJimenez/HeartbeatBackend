@@ -68,7 +68,7 @@ public class DeploymentTests
         Assert.Equal(abs, new SqliteConnectionStringBuilder(DeploymentSettings.ResolveSqliteConnectionString($"Data Source={abs}", "x")).DataSource);
     }
 
-    private sealed class ProdFactory(string? jwtKey, bool seed = false) : WebApplicationFactory<Program>
+    private sealed class ProdFactory(string? jwtKey, bool seed = false, bool withPasswords = true) : WebApplicationFactory<Program>
     {
         public readonly string DbPath = Path.Combine(Path.GetTempPath(), $"hb-{Guid.NewGuid():N}.db");
         public static int SeederRuns;
@@ -79,6 +79,13 @@ public class DeploymentTests
             builder.UseSetting("ConnectionStrings:DefaultConnection", $"Data Source={DbPath}");
             if (jwtKey is not null) builder.UseSetting("Jwt:Key", jwtKey);
             builder.UseSetting("Seed:Enabled", seed ? "true" : "false");
+            if (seed && withPasswords)
+            {
+                foreach (var name in Heartbeat.Api.Data.Seeding.DemoDataSeeder.AccountNames)
+                {
+                    builder.UseSetting($"Seed:Passwords:{name}", "Test-Password-1");
+                }
+            }
             builder.ConfigureServices(s => s.AddSingleton<IDataSeeder, CountingSeeder>());
         }
 
@@ -113,6 +120,13 @@ public class DeploymentTests
         var res = await factory.CreateClient().GetAsync("/health");
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         Assert.Contains("\"status\":\"ok\"", await res.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public void Seed_without_configured_passwords_stops_the_app_instead_of_using_defaults()
+    {
+        using var factory = new ProdFactory(new string('k', 48), seed: true, withPasswords: false);
+        Assert.ThrowsAny<Exception>(() => factory.CreateClient());
     }
 
     [Fact]

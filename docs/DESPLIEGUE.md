@@ -7,14 +7,34 @@ La decisión de base de datos sigue siendo **SQLite** (un solo archivo, sin serv
 ## 1. Demo local (presentación)
 
 ```bash
-dotnet dev-certs https --trust                                   # una sola vez: certificado HTTPS local
-dotnet run --project src/Heartbeat.Api --launch-profile https    # https://localhost:7017
+dotnet dev-certs https --trust                                 # una sola vez: certificado HTTPS local
+dotnet run --project src/Heartbeat.Api --launch-profile demo   # https://localhost:7017, con datos de demo
 ```
 
-- Corre en `Development`: la clave JWT de desarrollo ya está en `appsettings.Development.json` (es pública a propósito
-  y la API **no** la acepta en `Production`). La base se crea y migra sola en `src/Heartbeat.Api/heartbeat.db`.
-- Datos de demo: cuando el seed (#10) esté en `dev`, arranca con `Seed__Enabled=true` una vez
-  (`$env:Seed__Enabled="true"` en PowerShell). Hasta entonces no hay roles ni usuarios para iniciar sesión.
+- El perfil `demo` corre en `Development` con `Seed__Enabled=true`: crea la base (`src/Heartbeat.Api/heartbeat.db`),
+  aplica las migraciones y carga los datos de demo una sola vez (es idempotente; reiniciar no duplica nada).
+  El perfil `https` arranca la API sin datos.
+- La clave JWT de desarrollo ya está en `appsettings.Development.json` (es pública a propósito y la API **no** la
+  acepta en `Production`).
+- Las 30 jornadas terminan "hoy" (la hora del seed), así que las gráficas siempre se ven actuales. Para renovarlas,
+  borra `heartbeat.db` (y `-shm`/`-wal`) con la API detenida y vuelve a arrancar.
+
+### Cuentas de demo
+
+Las contraseñas están **solo** en `appsettings.Development.json` (sección `Seed:Passwords`); el seed nunca usa una
+contraseña por defecto y se detiene si falta alguna.
+
+| Cuenta | API | Rol / historia |
+| --- | --- | --- |
+| `admin` | portal | Administrator |
+| `j.okafor` | portal | Flight Surgeon (reconoce alertas) |
+| `m.chen` | portal | Mission Control Operator (solo lectura y mensajes) |
+| `a.rivera` "Comet" | escritorio | Sana 29 días; el día 30 pico de presión crítico → alerta abierta + reporte sin leer |
+| `k.sato` "Atlas" | escritorio | El sueño baja de 7 h a 4.5 h en dos semanas y el ánimo a 2 → tendencia de vigilancia |
+| `l.haddad` "Nova" | escritorio | Fiebre los días 18–20 (38.4 → 39.2 °C), luego se recupera → alerta reconocida |
+
+Todas las lecturas se evalúan con el evaluador compartido (`HealthEvaluator`); ningún estado está escrito a mano.
+
 - Portal y escritorio apuntan a `https://localhost:7017/` por su propia configuración (no por código):
   - Portal (`HeartbeatFrontWeb`): la `BaseAddress` del `HttpClient` de la MC API.
   - Escritorio (`HeartbeatFrontDesktop`): la `BaseAddress` del `HttpClient` que recibe `CrewApiClient`.
@@ -78,5 +98,5 @@ Y apuntar el portal y el escritorio a la nueva URL en su configuración.
 ## Estado de #46
 
 - [x] Código listo: secretos y cadena de conexión por entorno, HTTPS/HSTS, seed por configuración, `/health`, CI y Docker
-- [ ] Seed de demo (#10) en `dev`
+- [x] Seed de demo (#10)
 - [ ] Despliegue real: **aplazado**; la demo se presenta en local
