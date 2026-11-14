@@ -183,6 +183,28 @@ public static class CrewEndpoints
 
             db.CheckUps.Add(checkUp);
 
+            if (evaluation.OverallStatus == HealthStatus.Critical)
+            {
+                var alreadyAlert = await db.Alerts.AnyAsync(a => a.CheckUpId == checkUp.Id, cancellationToken);
+                if (!alreadyAlert)
+                {
+                    var criticalIndicators = evaluation.Readings
+                        .Where(r => r.Status == HealthStatus.Critical)
+                        .Select(r => r.Indicator.ToString())
+                        .Distinct()
+                        .ToList();
+
+                    db.Alerts.Add(new Alert
+                    {
+                        Id = Guid.NewGuid(),
+                        AstronautId = userId.Value,
+                        CheckUpId = checkUp.Id,
+                        Indicators = string.Join(",", criticalIndicators),
+                        CreatedAt = serverNow,
+                    });
+                }
+            }
+
             accepted.Add(checkUpDto.Id);
         }
 
