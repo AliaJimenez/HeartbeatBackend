@@ -3,6 +3,7 @@ using Heartbeat.Api.Data.Entities;
 using Heartbeat.Shared;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Net.Http.Headers;
 using System.Security.Claims;
 
 namespace Heartbeat.Api.Crew;
@@ -15,10 +16,25 @@ public static class CrewEndpoints
 
         group.MapGet("/me", GetMeAsync);
         group.MapPut("/me", UpdateMeAsync);
+        group.MapGet("/reference-ranges", GetReferenceRanges);
         group.MapPost("/sync", SyncAsync);
         group.MapGet("/checkups", GetCheckUpsAsync);
 
         return app;
+    }
+
+    private static IResult GetReferenceRanges(HttpContext context)
+    {
+        var etag = new EntityTagHeaderValue($"\"{ReferenceRanges.Version}\"");
+        var headers = context.Response.GetTypedHeaders();
+        headers.ETag = etag;
+        headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+
+        var ifNoneMatch = context.Request.GetTypedHeaders().IfNoneMatch;
+        var matches = ifNoneMatch.Any(t => t == EntityTagHeaderValue.Any || t.Compare(etag, useStrongComparison: false));
+        return matches
+            ? Results.StatusCode(StatusCodes.Status304NotModified)
+            : Results.Content(ReferenceRanges.Json, "application/json");
     }
 
     private static async Task<IResult> GetMeAsync(
