@@ -76,6 +76,14 @@ public sealed class HealthEvaluator : IHealthEvaluator
             }
         }
 
+        // Blood pressure is a pair: without the diastolic value only half of the reading would be evaluated.
+        if (!input.SecondaryValue.HasValue
+            && indicator.TryGetProperty("valueKind", out var kind)
+            && kind.GetString() == "pair")
+        {
+            errors.Add("SecondaryValue is required for this indicator.");
+        }
+
         return errors;
     }
 
@@ -116,9 +124,13 @@ public sealed class HealthEvaluator : IHealthEvaluator
                 ? (valueBand.GetProperty("status").GetString() == "watch" ? valueBand.GetProperty("label").GetString()! : (secondaryBand.HasValue && secondaryBand.Value.GetProperty("status").GetString() == "watch" ? secondaryBand.Value.GetProperty("label").GetString()! : valueBand.GetProperty("label").GetString()!))
                 : valueBand.GetProperty("label").GetString()!);
 
+        // Guidance of the worst band(s) only (CONTRACTS.md §2 rule 5); a normal half must not dilute the advice.
         var guidance = new List<string>();
-        AddGuidance(guidance, valueBand);
-        if (secondaryBand is not null) AddGuidance(guidance, secondaryBand.Value);
+        if (ParseStatus(valueBand.GetProperty("status").GetString()!) == status) AddGuidance(guidance, valueBand);
+        if (secondaryBand is not null && ParseStatus(secondaryBand.Value.GetProperty("status").GetString()!) == status)
+        {
+            AddGuidance(guidance, secondaryBand.Value);
+        }
 
         var escalation = status is HealthStatus.Watch or HealthStatus.Critical
             ? BuildEscalation(status)
