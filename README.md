@@ -2,60 +2,41 @@
 
 NASA Space Apps 2026 — astronaut self-assessment and Mission Control platform.
 
-## Projects
+## Projects in this repository
 
 | Project | Type | Target |
 | --- | --- | --- |
-| Heartbeat.Shared | Class library | 
-et10.0 |
-| Heartbeat.Api | ASP.NET Core (minimal APIs) | 
-et10.0 |
-| Heartbeat.Client | Class library | 
-et10.0 |
-| Heartbeat.Desktop | WPF application | 
-et10.0-windows |
-| Heartbeat.Portal | Blazor Web App | 
-et10.0 |
-| Heartbeat.Tests | xUnit | 
-et10.0 |
+| Heartbeat.Shared | Class library | `net10.0` |
+| Heartbeat.Api | ASP.NET Core (minimal APIs) | `net10.0` |
+| Heartbeat.Client | Class library | `net10.0` |
+| Heartbeat.Tests | xUnit | `net10.0` |
+
+`Heartbeat.Desktop` (WPF) and `Heartbeat.Portal` (Blazor Web App) are developed in their own repositories and consume `Heartbeat.Shared`/`Heartbeat.Client` via submodule.
 
 ## Prerequisites
 
 - .NET SDK 10.0.x
-- Windows (required to build/run Heartbeat.Desktop)
 
 ## Build everything
 
-`ash
+```bash
 dotnet build Heartbeat.sln
-`
+```
 
 ## Run
 
 ### API
 
-`ash
+```bash
 dotnet run --project src/Heartbeat.Api/Heartbeat.Api.csproj
-`
-
-### Portal
-
-`ash
-dotnet run --project src/Heartbeat.Portal/Heartbeat.Portal.csproj
-`
-
-### Desktop (Windows only)
-
-`ash
-dotnet run --project src/Heartbeat.Desktop/Heartbeat.Desktop.csproj
-`
+```
 
 ## Test
 
-`ash
+```bash
 dotnet test Heartbeat.sln
-`
+```
 
 ## Contracts
 
-Shared data model and API contracts live in [contracts/](contracts). The eference-ranges.json file is embedded into Heartbeat.Shared.
+Shared data model and API contracts live in [contracts/](contracts). The `reference-ranges.json` file is embedded into `Heartbeat.Shared`.
