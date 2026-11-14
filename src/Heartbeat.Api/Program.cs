@@ -1,4 +1,5 @@
 using Heartbeat.Api.Auth;
+using Heartbeat.Api.Crew;
 using Heartbeat.Api.Data;
 using Heartbeat.Api.Data.Entities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -67,5 +68,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAuthEndpoints();
+app.MapCrewEndpoints();
 
 app.Run();
