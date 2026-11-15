@@ -68,9 +68,27 @@ Todas exigen token y siguen la misma regla de acceso que la FC en vivo (con la d
 
 ### 2.1 WatchSync (backend Python)
 
-WatchSync es un servicio **aparte** (Python, con su propia base de datos PostgreSQL) y **su código no está en este repositorio**. Heartbeat solo necesita que responda en `WatchSync:BaseUrl` (por defecto `http://127.0.0.1:8000/api/v1`) y que exista una cuenta con la que iniciar sesión.
+WatchSync es un servicio **aparte** y **su código no está en este repositorio**. Heartbeat solo necesita que responda en `WatchSync:BaseUrl` (por defecto `http://127.0.0.1:8000/api/v1`) y que exista una cuenta con la que iniciar sesión.
 
-> **Pendiente de completar por quien mantiene WatchSync:** dónde está el repositorio y el comando exacto para arrancarlo. Sin WatchSync en marcha, `/api/salud/*` responde `503` o `502`, pero la FC en vivo funciona igual.
+En el equipo de la demo vive así (las rutas son las de ese equipo; ajústalas al tuyo):
+
+- **Código:** carpeta `Nueva carpeta\backend`, una API FastAPI con Python 3.13 y su propio `.venv`.
+- **Base de datos:** PostgreSQL 17 portátil en `D:\PostgreSQL\17`, con los datos en `D:\PostgreSQL\data17`. Escucha en `127.0.0.1:5433`. **No es un servicio de Windows**: hay que arrancarla a mano después de cada reinicio.
+- **Configuración:** `backend\.env`, que no se versiona.
+
+Desde PowerShell, en la carpeta `backend`:
+
+```powershell
+.\scripts\dev.ps1 pg-start   # arranca PostgreSQL (tras cada reinicio)
+.\scripts\dev.ps1 migrate    # solo si hay migraciones nuevas
+.\scripts\dev.ps1 api-red    # API en 0.0.0.0:8000 (el teléfono llega por Wi-Fi)
+```
+
+`api-red` escucha en todas las interfaces para que el teléfono (que sincroniza Samsung Health) llegue por Wi-Fi; `.\scripts\dev.ps1 api` escucha solo en este equipo (`127.0.0.1:8000`), suficiente si no hace falta el teléfono.
+
+> **Ojo con las copias.** Puede haber más de una copia del backend en el equipo (por ejemplo una en `Downloads\Nueva carpeta\backend`). Todas usan la misma base de datos y funcionan igual, pero conviene saber cuál se está ejecutando y cuál se edita.
+
+Sin WatchSync ni PostgreSQL en marcha, `/api/salud/*` responde `503` o `502`, pero la FC en vivo funciona igual.
 
 ### 2.2 Credenciales de WatchSync
 
