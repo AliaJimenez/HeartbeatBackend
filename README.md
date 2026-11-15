@@ -49,7 +49,8 @@ dotnet run --project src/Heartbeat.Api/Heartbeat.Api.csproj
 ### Claude assistant (optional)
 
 The authenticated crew endpoint `POST /api/crew/v1/assistant/chat` explains the caller's current `RiskStatus` and open
-alerts in plain language through Anthropic Claude. It is disabled by default, never participates in evaluation or sync,
+alerts in plain language through Anthropic Claude. Mission Control can use
+`POST /api/mc/v1/crew/{id}/assistant/chat` when the signed-in user has `vitals.view`. It is disabled by default, never participates in evaluation or sync,
 and receives no profile notes, messages, date of birth, credentials or tokens. If Claude is unavailable, the rest of
 Heartbeat continues to work normally.
 
