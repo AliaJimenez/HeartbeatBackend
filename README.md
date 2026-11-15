@@ -13,6 +13,14 @@ NASA Space Apps 2026 — astronaut self-assessment and Mission Control platform.
 
 `Heartbeat.Desktop` (WPF) and `Heartbeat.Portal` (Blazor Web App) are developed in their own repositories and consume `Heartbeat.Shared`/`Heartbeat.Client` via submodule.
 
+## Check-up streaks (NR-06)
+
+`Heartbeat.Shared.CheckUpStreaks.Calculate(recordedAt, now, timeZone)` returns a `StreakSummary` (current streak, best
+streak, whether today is done, total days, `StreakBadge` and days to the next badge). It is pure, so the desktop
+computes it offline from its local check-ups and gets the same result as the server. Days are calendar days in the
+astronaut's time zone; the streak stays alive until the end of today if yesterday was done. Badges: Bronze 3, Silver 7,
+Gold 30 days.
+
 ## Prerequisites
 
 - .NET SDK 10.0.x
