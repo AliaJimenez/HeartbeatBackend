@@ -8,6 +8,20 @@ public sealed class WatchSyncOptions
 {
     public string BaseUrl { get; set; } = "http://127.0.0.1:8000/api/v1";
 
+    /// <summary>Cuenta por defecto: la que usa quien no tiene una cuenta propia en <see cref="Accounts"/>.</summary>
+    public string Email { get; set; } = "";
+
+    public string Password { get; set; } = "";
+
+    /// <summary>
+    /// Cuentas de WatchSync por astronauta (opcional), con el <c>UserName</c> del astronauta como clave:
+    /// <c>WatchSync:Accounts:a.rivera:Email</c> y <c>...:Password</c> (user-secrets o variables de entorno).
+    /// </summary>
+    public Dictionary<string, WatchSyncAccount> Accounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+public sealed class WatchSyncAccount
+{
     public string Email { get; set; } = "";
 
     public string Password { get; set; } = "";

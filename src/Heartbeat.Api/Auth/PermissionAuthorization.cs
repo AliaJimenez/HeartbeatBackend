@@ -11,6 +11,9 @@ public static class AuthConstants
     public const string McPolicy = "Mc";
     public const string CrewPolicy = "Crew";
 
+    /// <summary>Datos de un astronauta (FC en vivo, Samsung Health): un tripulante, o MC con <c>vitals.view</c>.</summary>
+    public const string AstronautDataPolicy = "AstronautData";
+
     public static string PolicyFor(string permission) => $"perm:{permission}";
 }
 
@@ -46,6 +49,18 @@ public static class PermissionAuthorizationExtensions
                 policy => policy.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(permission)));
         }
 
+        return options;
+    }
+
+    /// <summary>Registers <see cref="AuthConstants.AstronautDataPolicy"/>.</summary>
+    public static AuthorizationOptions AddAstronautDataPolicy(this AuthorizationOptions options)
+    {
+        options.AddPolicy(
+            AuthConstants.AstronautDataPolicy,
+            policy => policy.RequireAuthenticatedUser().RequireAssertion(context =>
+                context.User.HasClaim("aud", AuthConstants.CrewAudience)
+                || (context.User.HasClaim("aud", AuthConstants.McAudience)
+                    && context.User.HasClaim(AuthConstants.PermissionClaim, Permissions.VitalsView))));
         return options;
     }
 

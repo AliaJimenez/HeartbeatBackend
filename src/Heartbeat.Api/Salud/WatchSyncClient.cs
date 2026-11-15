@@ -2,13 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.Options;
 
 namespace Heartbeat.Api.Salud;
 
 /// <summary>
-/// Cliente del backend Python "WatchSync API". La sesión es una cookie (<c>session</c>) que guarda el
-/// <see cref="CookieContainer"/> singleton; si una llamada devuelve 401 se hace login y se repite una sola vez.
+/// Cliente del backend Python "WatchSync API" para UNA cuenta. La sesión es una cookie (<c>session</c>) que guarda el
+/// <see cref="CookieContainer"/> del <see cref="HttpClient"/> de esa cuenta; si una llamada devuelve 401 se hace login y
+/// se repite una sola vez. <see cref="WatchSyncClients"/> crea uno por cuenta.
 /// </summary>
 public sealed class WatchSyncClient
 {
@@ -16,16 +16,18 @@ public sealed class WatchSyncClient
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    // El cliente tipado es transitorio: el semáforo es estático para que solo haya un login a la vez en todo el proceso.
+    // Un solo login a la vez en todo el proceso, sea cual sea la cuenta.
     private static readonly SemaphoreSlim LoginLock = new(1, 1);
 
     private readonly HttpClient _http;
-    private readonly WatchSyncOptions _options;
+    private readonly string _email;
+    private readonly string _password;
 
-    public WatchSyncClient(HttpClient http, IOptions<WatchSyncOptions> options)
+    public WatchSyncClient(HttpClient http, string email, string password)
     {
         _http = http;
-        _options = options.Value;
+        _email = email;
+        _password = password;
     }
 
     public Task<DailySummaryDto> GetSummaryAsync(DateOnly date, CancellationToken ct) =>
@@ -80,7 +82,7 @@ public sealed class WatchSyncClient
         {
             var request = new HttpRequestMessage(HttpMethod.Post, "auth/login")
             {
-                Content = JsonContent.Create(new LoginBody(_options.Email, _options.Password), options: Json),
+                Content = JsonContent.Create(new LoginBody(_email, _password), options: Json),
             };
             using HttpResponseMessage response = await SendOnceAsync(request, ct);
             await EnsureSuccessAsync(response, ct);

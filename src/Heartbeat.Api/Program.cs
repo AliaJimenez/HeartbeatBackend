@@ -67,12 +67,28 @@ builder.Services.AddAuthentication(options =>
             IssuerSigningKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(jwtKey)),
             ClockSkew = TimeSpan.FromMinutes(1),
         };
+
+        // Los navegadores no pueden poner cabeceras en WebSockets: el hub de FC en vivo acepta el token en ?access_token=.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs/heartrate"))
+                {
+                    context.Token = token;
+                }
+
+                return Task.CompletedTask;
+            },
+        };
     });
 
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy(AuthConstants.CrewPolicy, policy => policy.RequireAuthenticatedUser().RequireClaim("aud", AuthConstants.CrewAudience));
     options.AddPolicy(AuthConstants.McPolicy, policy => policy.RequireAuthenticatedUser().RequireClaim("aud", AuthConstants.McAudience));
+    options.AddAstronautDataPolicy();
     options.AddPermissionPolicies();
     options.AddRolePolicies();
 });
@@ -81,23 +97,14 @@ builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
 
 builder.Services.AddSingleton<JwtTokenService>();
 
-// FC en vivo del Galaxy Watch 5 (Live/): búfer en memoria y difusión por SignalR.
+// FC en vivo del Galaxy Watch 5 (Live/): un búfer en memoria por astronauta y difusión por SignalR a su grupo.
 builder.Services.AddSignalR();
-builder.Services.AddSingleton<HeartRateBuffer>();
+builder.Services.AddSingleton<HeartRateStore>();
 
-// Datos de Samsung Health desde el backend Python WatchSync (Salud/). La contraseña va en user-secrets.
+// Datos de Samsung Health desde el backend Python WatchSync (Salud/). Las contraseñas van en user-secrets.
 builder.Services.Configure<WatchSyncOptions>(builder.Configuration.GetSection("WatchSync"));
-builder.Services.AddSingleton<System.Net.CookieContainer>();
-builder.Services.AddHttpClient<WatchSyncClient>((sp, http) =>
-{
-    var o = sp.GetRequiredService<IOptions<WatchSyncOptions>>().Value;
-    http.BaseAddress = new Uri(o.BaseUrl.TrimEnd('/') + "/");
-    http.Timeout = TimeSpan.FromSeconds(10);
-}).ConfigurePrimaryHttpMessageHandler(sp => new HttpClientHandler
-{
-    UseCookies = true,
-    CookieContainer = sp.GetRequiredService<System.Net.CookieContainer>(),
-});
+builder.Services.AddSingleton<IWatchSyncClients>(sp =>
+    new WatchSyncClients(sp.GetRequiredService<IOptions<WatchSyncOptions>>().Value));
 
 var app = builder.Build();
 
@@ -150,6 +157,7 @@ app.MapMcUsersEndpoints();
 app.MapMcAlertsEndpoints();
 app.MapMcMessagesEndpoints();
 app.MapCrewEndpoints();
+app.MapMcWatchesEndpoints();
 app.MapHub<HeartRateHub>("/hubs/heartrate");
 app.MapLiveHeartRate();
 app.MapSalud();
