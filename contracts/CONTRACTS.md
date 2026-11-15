@@ -883,6 +883,33 @@ IReadOnlyList<IndicatorCatalogEntry> DomainProfiles.Effective(DomainProfile prof
 IndicatorBand DomainProfiles.Evaluate(DomainProfile profile, string indicatorId, decimal value);            // banda de un valor bajo ese perfil
 ```
 
+### Relojes: asociación a un astronauta y FC en vivo protegida (WR-BIND, issue #152)
+
+Cada reloj (Galaxy Watch 5) está registrado para **un astronauta** y presenta una **clave propia**. Antes, `POST /api/heartrate`, `GET /latest`, `GET /recent` y el hub `/hubs/heartrate` eran anónimos y no sabían de quién era la lectura.
+
+**Registro (Mission Control, `crew.manage`).** La clave se genera en el servidor (256 bits), se devuelve **una sola vez** al registrar o rotar, y en la base solo queda su hash SHA-256 (tabla `WatchDevices`: `DeviceId` único, `KeyHash` único, `AstronautId`). Borrar el reloj revoca su clave.
+
+| Método | Ruta | Cuerpo → Respuesta |
+| --- | --- | --- |
+| GET | `/api/mc/v1/watches?astronautId=` | → `WatchDeviceDto[]` (sin claves) |
+| POST | `/api/mc/v1/watches` | `RegisterWatchRequest` → 201 `WatchRegisteredDto` (400 datos inválidos o astronauta inexistente, 409 `deviceId` repetido) |
+| POST | `/api/mc/v1/watches/{id}/rotate-key` | → `WatchRegisteredDto` con la clave nueva (la anterior deja de valer) |
+| DELETE | `/api/mc/v1/watches/{id}` | → 204 |
+
+```csharp
+public sealed record RegisterWatchRequest(Guid AstronautId, string DeviceId, string? Label = null);
+public sealed record WatchDeviceDto(Guid Id, string DeviceId, Guid AstronautId, string? Label, DateTimeOffset CreatedAt);
+public sealed record WatchRegisteredDto(WatchDeviceDto Device, string Key);   // Key: la que el reloj manda en X-Watch-Key
+```
+
+**El reloj.** `POST /api/heartrate` exige la cabecera **`X-Watch-Key: <clave>`**; sin cabecera o con una clave desconocida o revocada responde **401**. El cuerpo del reloj no cambia (`{ "bpm", "measuredAt", "source" }`) y el astronauta sale de la clave, no del cuerpo. Sigue siendo HTTP, sin redirección a HTTPS, solo para la red local de la demo.
+
+**Quien consulta.** `GET /api/heartrate/latest`, `GET /api/heartrate/recent` y el hub exigen token: un **tripulante** ve solo su reloj (el astronauta sale del token; pedir otro con `astronautId` da 403); **MC con `vitals.view`** ve cualquiera y debe indicarlo con `astronautId` (400 si falta, 404 si no existe). MC sin `vitals.view`, 403. El búfer de 600 lecturas es **uno por astronauta**.
+
+**Hub `/hubs/heartrate`.** Mismo token (en WebSockets, `?access_token=`, que solo se acepta en el hub). El servidor envía el evento `HeartRate` (mismo cuerpo que antes) solo al grupo del astronauta: el tripulante recibe el suyo; MC conecta con `?astronautId=`. Una petición no permitida cierra la conexión.
+
+**`/api/salud/*` (Samsung Health vía WatchSync).** Mismo control de acceso (MC ahora necesita `vitals.view`) y el parámetro opcional `astronautId` con las mismas reglas, salvo que MC sin él usa la cuenta por defecto. Cada astronauta puede tener **su cuenta de WatchSync** en la configuración (las contraseñas no van en appsettings): `WatchSync:Accounts:<UserName del astronauta>:Email` y `...:Password`, por user-secrets o variables de entorno. Quien no tiene cuenta propia usa la de `WatchSync:Email`/`Password`, como hasta ahora.
+
 ### CatalogStatus y RadiationType (enums)
 
 Ver arriba. Los umbrales del catálogo (`contracts/indicators.catalog.json`) llevan `source` y `status: verified | heuristic`. `CatalogStatus` refleja ese estado en código. `RadiationType` clasifica una dosis/ambiente: `gcr` (radiación galáctica cósmica), `spe` (evento de partículas solares), `trapped` (radiación atrapada).

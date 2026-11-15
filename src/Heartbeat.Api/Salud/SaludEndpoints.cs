@@ -1,11 +1,16 @@
 using System.Globalization;
+using System.Security.Claims;
 using Heartbeat.Api.Auth;
+using Heartbeat.Api.Data;
+using Heartbeat.Api.Live;
+using Microsoft.EntityFrameworkCore;
 
 namespace Heartbeat.Api.Salud;
 
 /// <summary>
 /// Datos de Samsung Health (resumen, FC histórica, sueño, actividad, presión y sincronización) leídos del backend
-/// Python y reexpuestos tal cual. Exigen sesión, como el resto de rutas de datos (token de tripulante o de MC).
+/// Python y reexpuestos tal cual. Exigen sesión: un tripulante usa la cuenta de WatchSync asociada a él (o la de por defecto);
+/// MC con <c>vitals.view</c> puede pedir la de un astronauta con <c>?astronautId=</c> (sin él, la de por defecto).
 /// </summary>
 public static class SaludEndpoints
 {
@@ -14,9 +19,7 @@ public static class SaludEndpoints
     public static IEndpointRouteBuilder MapSalud(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/salud")
-            .RequireAuthorization(policy => policy
-                .RequireAuthenticatedUser()
-                .RequireClaim("aud", AuthConstants.CrewAudience, AuthConstants.McAudience));
+            .RequireAuthorization(AuthConstants.AstronautDataPolicy);
 
         group.MapGet("/resumen", GetResumenAsync);
         group.MapGet("/fc", GetFcAsync);
@@ -28,7 +31,8 @@ public static class SaludEndpoints
         return app;
     }
 
-    private static Task<IResult> GetResumenAsync(WatchSyncClient client, string? fecha, CancellationToken ct)
+    private static Task<IResult> GetResumenAsync(
+        ClaimsPrincipal user, AppDbContext db, IWatchSyncClients clients, Guid? astronautId, string? fecha, CancellationToken ct)
     {
         DateOnly date = DateOnly.FromDateTime(DateTime.Now);
         if (!string.IsNullOrWhiteSpace(fecha)
@@ -37,11 +41,12 @@ public static class SaludEndpoints
             return Task.FromResult(Error(StatusCodes.Status400BadRequest, "fecha debe tener el formato yyyy-MM-dd"));
         }
 
-        return ProxyAsync(() => client.GetSummaryAsync(date, ct));
+        return WithClientAsync(user, db, clients, astronautId, ct, client => ProxyAsync(() => client.GetSummaryAsync(date, ct)));
     }
 
     private static Task<IResult> GetFcAsync(
-        WatchSyncClient client, DateTimeOffset? desde, DateTimeOffset? hasta, string? resolucion, CancellationToken ct)
+        ClaimsPrincipal user, AppDbContext db, IWatchSyncClients clients, Guid? astronautId,
+        DateTimeOffset? desde, DateTimeOffset? hasta, string? resolucion, CancellationToken ct)
     {
         string resolution = string.IsNullOrWhiteSpace(resolucion) ? "1h" : resolucion;
         if (!Resolutions.Contains(resolution))
@@ -51,30 +56,58 @@ public static class SaludEndpoints
 
         DateTimeOffset to = hasta ?? DateTimeOffset.Now;
         DateTimeOffset from = desde ?? (resolution == "raw" ? to.AddHours(-24) : to.AddDays(-7));
-        return ProxyAsync(() => client.GetHeartRateAsync(from, to, resolution, ct));
+        return WithClientAsync(user, db, clients, astronautId, ct, client => ProxyAsync(() => client.GetHeartRateAsync(from, to, resolution, ct)));
     }
 
-    private static Task<IResult> GetSuenoAsync(WatchSyncClient client, DateTimeOffset? desde, DateTimeOffset? hasta, CancellationToken ct)
+    private static Task<IResult> GetSuenoAsync(
+        ClaimsPrincipal user, AppDbContext db, IWatchSyncClients clients, Guid? astronautId,
+        DateTimeOffset? desde, DateTimeOffset? hasta, CancellationToken ct)
     {
         (DateTimeOffset from, DateTimeOffset to) = LastWeek(desde, hasta);
-        return ProxyAsync(() => client.GetSleepAsync(from, to, ct));
+        return WithClientAsync(user, db, clients, astronautId, ct, client => ProxyAsync(() => client.GetSleepAsync(from, to, ct)));
     }
 
-    private static Task<IResult> GetActividadAsync(WatchSyncClient client, DateOnly? desde, DateOnly? hasta, CancellationToken ct)
+    private static Task<IResult> GetActividadAsync(
+        ClaimsPrincipal user, AppDbContext db, IWatchSyncClients clients, Guid? astronautId,
+        DateOnly? desde, DateOnly? hasta, CancellationToken ct)
     {
         DateOnly to = hasta ?? DateOnly.FromDateTime(DateTime.Now);
         DateOnly from = desde ?? to.AddDays(-6);
-        return ProxyAsync(() => client.GetDailyActivityAsync(from, to, ct));
+        return WithClientAsync(user, db, clients, astronautId, ct, client => ProxyAsync(() => client.GetDailyActivityAsync(from, to, ct)));
     }
 
-    private static Task<IResult> GetPresionAsync(WatchSyncClient client, DateTimeOffset? desde, DateTimeOffset? hasta, CancellationToken ct)
+    private static Task<IResult> GetPresionAsync(
+        ClaimsPrincipal user, AppDbContext db, IWatchSyncClients clients, Guid? astronautId,
+        DateTimeOffset? desde, DateTimeOffset? hasta, CancellationToken ct)
     {
         (DateTimeOffset from, DateTimeOffset to) = LastWeek(desde, hasta);
-        return ProxyAsync(() => client.GetBloodPressureAsync(from, to, ct));
+        return WithClientAsync(user, db, clients, astronautId, ct, client => ProxyAsync(() => client.GetBloodPressureAsync(from, to, ct)));
     }
 
-    private static Task<IResult> GetEstadoAsync(WatchSyncClient client, CancellationToken ct) =>
-        ProxyAsync(() => client.GetSyncStatusAsync(ct));
+    private static Task<IResult> GetEstadoAsync(
+        ClaimsPrincipal user, AppDbContext db, IWatchSyncClients clients, Guid? astronautId, CancellationToken ct) =>
+        WithClientAsync(user, db, clients, astronautId, ct, client => ProxyAsync(() => client.GetSyncStatusAsync(ct)));
+
+    /// <summary>
+    /// Aplica la regla de acceso y elige la cuenta de WatchSync: la asociada al astronauta (por su <c>UserName</c>) o la de
+    /// por defecto. Un tripulante solo puede pedir lo suyo; MC sin <c>astronautId</c> usa la cuenta por defecto.
+    /// </summary>
+    private static async Task<IResult> WithClientAsync(
+        ClaimsPrincipal user, AppDbContext db, IWatchSyncClients clients, Guid? astronautId, CancellationToken ct,
+        Func<WatchSyncClient, Task<IResult>> call)
+    {
+        var access = await AstronautAccess.ResolveAsync(user, astronautId, db, mcMustSpecify: false, ct);
+        if (!access.Allowed)
+        {
+            return access.ToProblem();
+        }
+
+        string? userName = access.AstronautId is { } id
+            ? await db.Astronauts.AsNoTracking().Where(a => a.Id == id).Select(a => a.UserName).FirstOrDefaultAsync(ct)
+            : null;
+
+        return await call(clients.For(userName));
+    }
 
     private static (DateTimeOffset From, DateTimeOffset To) LastWeek(DateTimeOffset? desde, DateTimeOffset? hasta)
     {

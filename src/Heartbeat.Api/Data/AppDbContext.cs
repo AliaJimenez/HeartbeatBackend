@@ -17,6 +17,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<RadiationDose> RadiationDoses => Set<RadiationDose>();
     public DbSet<EnvironmentReading> EnvironmentReadings => Set<EnvironmentReading>();
+    public DbSet<WatchDevice> WatchDevices => Set<WatchDevice>();
     public DbSet<PortalUser> PortalUsers => Set<PortalUser>();
     public new DbSet<Role> Roles => Set<Role>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
@@ -86,6 +87,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             e.HasIndex(r => r.RecordedAt);
             e.HasOne(r => r.Astronaut).WithMany().HasForeignKey(r => r.AstronautId).IsRequired(false);
             e.HasOne(r => r.Mission).WithMany().HasForeignKey(r => r.MissionId).IsRequired(false);
+        });
+
+        builder.Entity<WatchDevice>(e =>
+        {
+            e.Property(w => w.DeviceId).HasMaxLength(WatchDevice.DeviceIdMaxLength);
+            e.Property(w => w.KeyHash).HasMaxLength(64);
+            e.Property(w => w.Label).HasMaxLength(WatchDevice.LabelMaxLength);
+            e.HasIndex(w => w.DeviceId).IsUnique();
+            e.HasIndex(w => w.KeyHash).IsUnique();
+            e.HasIndex(w => w.AstronautId);
+            e.HasOne(w => w.Astronaut).WithMany().HasForeignKey(w => w.AstronautId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<Message>()
