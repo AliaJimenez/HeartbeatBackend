@@ -5,6 +5,7 @@ using Heartbeat.Api.Data;
 using Heartbeat.Api.Data.Entities;
 using Heartbeat.Api.Data.Seeding;
 using Heartbeat.Api.Deployment;
+using Heartbeat.Api.Messages;
 using Heartbeat.Api.Roles;
 using Heartbeat.Api.Users;
 using Heartbeat.Api.Vitals;
@@ -120,6 +121,7 @@ app.MapMcVitalsEndpoints();
 app.MapMcRolesEndpoints();
 app.MapMcUsersEndpoints();
 app.MapMcAlertsEndpoints();
+app.MapMcMessagesEndpoints();
 app.MapCrewEndpoints();
 
 app.Run();
