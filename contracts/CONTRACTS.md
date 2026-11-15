@@ -606,7 +606,20 @@ public sealed record RadiationSummaryDto(
     SourceLink Source,
     RadiationType Type = RadiationType.Gcr,
     decimal Rate = 0m,
-    decimal PercentOfLimit = 0m);
+    decimal PercentOfLimit = 0m,
+    decimal SpeDoseMsv = 0m,          // largest single solar particle event
+    decimal PercentOfSpeLimit = 0m,   // SpeDoseMsv against 250 mSv per event
+    HealthStatus Status = HealthStatus.Normal);   // worse of career (600 mSv) and SPE status
+```
+
+`RadiationDoseDto` gains `Type` (`gcr` | `spe` | `trapped`, default `gcr`), pushed by the desktop in `radiationDoses` of the sync. `type` of the summary is the type with the most accumulated dose; `rate` is the GCR rate (mSv/day) of the mission's environment; `percentOfLimit` is the total against 600 mSv.
+
+**Radiation alerts (HB-BE-02).** The sync creates an `Alert` row, so it appears in `GET /alerts` with no extra call, when a pushed dose is an SPE event, or when the cumulative dose first reaches the critical band (600 mSv). Such alerts have `kind: "radiation"`, `checkUpId: null`, the `radiationDoseId` that triggered them and a plain-language `message` (simulated data). `AlertDto` and `AcknowledgedAlert` therefore have a nullable `checkUpId`; check-up alerts keep `kind: "checkUp"`:
+
+```csharp
+// appended to AlertDto: AlertKind Kind = AlertKind.CheckUp, Guid? RadiationDoseId = null, string? Message = null
+// AcknowledgedAlert: Guid? CheckUpId, ..., Guid? RadiationDoseId = null
+public enum AlertKind { CheckUp, Radiation }
 ```
 
 ### HazardStatus

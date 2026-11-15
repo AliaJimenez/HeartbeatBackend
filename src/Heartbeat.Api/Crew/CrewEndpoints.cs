@@ -348,7 +348,8 @@ public static class CrewEndpoints
             a.CheckUpId,
             a.AcknowledgedAt!.Value,
             a.AcknowledgedByUserId is { } by ? ackNames.GetValueOrDefault(by, "Mission Control") : "Mission Control",
-            a.AcknowledgeNote)).ToList();
+            a.AcknowledgeNote,
+            a.RadiationDoseId)).ToList();
 
         await db.SaveChangesAsync(cancellationToken);
 
@@ -429,11 +430,61 @@ public static class CrewEndpoints
                 Type = dose.Type,
             });
             mine.Add(dose.Id);
+            var totalBefore = total;
             total += dose.DoseMsv;
             accepted.Add(dose.Id);
+
+            await RaiseRadiationAlertsAsync(db, astronautId, dose, totalBefore, total, serverNow, cancellationToken);
         }
 
         return total;
+    }
+
+    // Radiation alerts (HB-BE-02): a solar particle event, or the cumulative dose reaching the critical band, creates an
+    // Alert row so it shows up in the portal without anyone asking. Both are created once, so a retried sync is harmless.
+    private static async Task RaiseRadiationAlertsAsync(
+        AppDbContext db,
+        Guid astronautId,
+        RadiationDoseDto dose,
+        decimal totalBefore,
+        decimal totalAfter,
+        DateTimeOffset serverNow,
+        CancellationToken cancellationToken)
+    {
+        if (dose.Type == RadiationType.Spe)
+        {
+            db.Alerts.Add(new Alert
+            {
+                Id = Guid.CreateVersion7(),
+                AstronautId = astronautId,
+                Kind = AlertKind.Radiation,
+                RadiationDoseId = dose.Id,
+                Indicators = RadiationDoses.AlertSpe,
+                Message = RadiationDoses.SpeAlertMessage(dose.DoseMsv),
+                CreatedAt = serverNow,
+            });
+        }
+
+        var wasCritical = RadiationDoses.StatusForCareerPercent(RadiationDoses.PercentOfCareerLimit(totalBefore)) == HealthStatus.Critical;
+        var isCritical = RadiationDoses.StatusForCareerPercent(RadiationDoses.PercentOfCareerLimit(totalAfter)) == HealthStatus.Critical;
+        if (isCritical && !wasCritical)
+        {
+            var alreadyRaised = await db.Alerts.AnyAsync(
+                a => a.AstronautId == astronautId && a.Indicators == RadiationDoses.AlertCumulative, cancellationToken);
+            if (!alreadyRaised)
+            {
+                db.Alerts.Add(new Alert
+                {
+                    Id = Guid.CreateVersion7(),
+                    AstronautId = astronautId,
+                    Kind = AlertKind.Radiation,
+                    RadiationDoseId = dose.Id,
+                    Indicators = RadiationDoses.AlertCumulative,
+                    Message = RadiationDoses.CumulativeAlertMessage(totalAfter),
+                    CreatedAt = serverNow,
+                });
+            }
+        }
     }
 
     private static async Task<IResult> GetMissionAsync(

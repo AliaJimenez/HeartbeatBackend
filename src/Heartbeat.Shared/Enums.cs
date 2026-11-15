@@ -50,6 +50,12 @@ public enum MessageKind
     Report
 }
 
+public enum AlertKind
+{
+    CheckUp,
+    Radiation
+}
+
 public enum RadiationType
 {
     Gcr,

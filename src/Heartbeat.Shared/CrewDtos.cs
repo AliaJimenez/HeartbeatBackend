@@ -90,10 +90,11 @@ public sealed record SyncRejected(
     string Reason);
 
 public sealed record AcknowledgedAlert(
-    Guid CheckUpId,
+    Guid? CheckUpId,
     DateTimeOffset AcknowledgedAt,
     string By,
-    string? Note);
+    string? Note,
+    Guid? RadiationDoseId = null);
 
 public sealed record SyncInbound(
     IReadOnlyList<MessageDto> Messages,
@@ -132,7 +133,10 @@ public sealed record RadiationSummaryDto(
     SourceLink Source,
     RadiationType Type = RadiationType.Gcr,
     decimal Rate = 0m,
-    decimal PercentOfLimit = 0m);
+    decimal PercentOfLimit = 0m,
+    decimal SpeDoseMsv = 0m,
+    decimal PercentOfSpeLimit = 0m,
+    HealthStatus Status = HealthStatus.Normal);
 
 public sealed record Paged<T>(
     IReadOnlyList<T> Items,
@@ -268,12 +272,15 @@ public sealed record AlertDto(
     Guid Id,
     Guid AstronautId,
     string AstronautName,
-    Guid CheckUpId,
+    Guid? CheckUpId,
     IReadOnlyList<IndicatorType> Indicators,
     DateTimeOffset CreatedAt,
     DateTimeOffset? AcknowledgedAt,
     string? AcknowledgedBy,
-    string? AcknowledgeNote);
+    string? AcknowledgeNote,
+    AlertKind Kind = AlertKind.CheckUp,
+    Guid? RadiationDoseId = null,
+    string? Message = null);
 
 /// <summary>Body of POST /alerts/{id}/acknowledge.</summary>
 public sealed record AcknowledgeAlertRequest(string Note);
