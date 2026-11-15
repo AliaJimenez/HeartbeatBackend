@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.NetworkInformation;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Heartbeat.Shared;
 
 namespace Heartbeat.Client;
@@ -12,6 +13,11 @@ public sealed class CrewApiClient : ICrewApiClient
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true,
+
+        // La API escribe y lee los enums como texto en camelCase ("critical", "toAstronaut"), igual que en
+        // contracts/CONTRACTS.md. Sin este convertidor el cliente no puede leer ninguna respuesta que los lleve
+        // (mensajes entrantes de /sync, historial de /checkups) y manda números en lugar del texto del contrato.
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
 
     private readonly HttpClient _http;
