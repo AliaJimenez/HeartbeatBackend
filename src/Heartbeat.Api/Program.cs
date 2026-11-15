@@ -117,6 +117,7 @@ app.MapGet("/health", async (AppDbContext db, CancellationToken ct) =>
 
 app.MapAuthEndpoints();
 app.MapMcCrewEndpoints();
+app.MapMcMissionEndpoints();
 app.MapMcVitalsEndpoints();
 app.MapMcRolesEndpoints();
 app.MapMcUsersEndpoints();
