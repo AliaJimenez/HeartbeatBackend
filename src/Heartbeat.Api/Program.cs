@@ -1,3 +1,4 @@
+using Heartbeat.Api.AI;
 using Heartbeat.Api.Alerts;
 using Heartbeat.Api.Auth;
 using Heartbeat.Api.Crew;
@@ -98,6 +99,7 @@ builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
 
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddSingleton<IHealthEvaluator, HealthEvaluator>();
+builder.Services.AddHeartbeatAssistant(builder.Configuration);
 
 // FC en vivo del Galaxy Watch 5 (Live/): un búfer en memoria por astronauta y difusión por SignalR a su grupo.
 builder.Services.AddSignalR();
@@ -170,6 +172,7 @@ app.MapMcWatchesEndpoints();
 app.MapHub<HeartRateHub>("/hubs/heartrate");
 app.MapLiveHeartRate();
 app.MapSalud();
+app.MapAssistantEndpoints();
 
 app.Run();
 
