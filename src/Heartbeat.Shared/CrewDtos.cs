@@ -97,9 +97,15 @@ public sealed record AcknowledgedAlert(
     string? Note,
     Guid? RadiationDoseId = null);
 
+/// <summary>Mission Control read one of the astronaut's messages (direction toMissionControl).</summary>
+public sealed record ReadReceipt(
+    Guid MessageId,
+    DateTimeOffset ReadAt);
+
 public sealed record SyncInbound(
     IReadOnlyList<MessageDto> Messages,
-    IReadOnlyList<AcknowledgedAlert> AcknowledgedAlerts);
+    IReadOnlyList<AcknowledgedAlert> AcknowledgedAlerts,
+    IReadOnlyList<ReadReceipt>? ReadReceipts = null);
 
 public sealed record SyncRequest(
     string DeviceId,
