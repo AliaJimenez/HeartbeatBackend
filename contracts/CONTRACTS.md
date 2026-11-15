@@ -1,6 +1,6 @@
 # Heartbeat — Data Model & API Contracts
 
-Version 0.2 · Nov 14, 2026 · Hours 0–4 deliverable. 0.2 adds `Reading.Source` and `Reading.DeviceId` (smartwatch readiness, issue #9). 0.3 adds radiation dose logging (issue #51).
+Version 0.2 · Nov 15, 2026 · Hours 0–4 deliverable. 0.2 adds `Reading.Source` and `Reading.DeviceId` (smartwatch readiness, issue #9), radiation dose logging (issue #51), and the environment / radiation v2 / risk / phantom DTOs (issue #95, §10).
 
 This file is the agreement every workstream builds against. Change it only by team agreement, and bump the version when you do.
 
@@ -518,3 +518,177 @@ Portal users: `admin` (Administrator), `j.okafor` (Flight Surgeon), `m.chen` (Mi
 - **Database engine:** SQL Server if the GoDaddy plan includes it, otherwise SQLite on the server too (EF Core makes the switch a config change). Decide with open question 3.
 - **Ranges review:** the values in `reference-ranges.json` are demo-grade, based on general adult clinical references. NASA HRP pages are cited for *why* each indicator matters in spaceflight; they do not publish thresholds. Say this in the pitch.
 - **Dead links:** all links returned HTTP 200 on Nov 14, 2026. Recheck before submission.
+
+## 10. Contrato v0.2 — DTOs de mejoras (issue #95)
+
+Publicados en `Heartbeat.Shared` para que todos los tracks (FE1, FE2, DA1, BE2) programen contra ellos. Todo dato nuevo es **simulado** y se etiqueta así en la UI; no hay afirmaciones diagnósticas. Umbrales y fórmulas viven en el catálogo con `source` y `status` (`verified` | `heuristic`).
+
+Enums nuevos:
+
+```csharp
+public enum RadiationType { Gcr, Spe, Trapped }   // GCR, SPE, radiación atrapada
+public enum CatalogStatus { Verified, Heuristic }  // estado de un umbral/fórmula del catálogo
+```
+
+### EnvironmentProfile
+
+Perfil de entorno de una misión (gravedad, distancia a la Tierra, tripulación, volumen habitable).
+
+```jsonc
+{
+  "type": "station",
+  "gravityG": 0.0,
+  "distanceKm": 408.0,
+  "crewSize": 4,
+  "habitableVolumeM3": 388.0
+}
+```
+
+```csharp
+public sealed record EnvironmentProfile(
+    string Type,
+    decimal GravityG,
+    decimal DistanceKm,
+    int CrewSize,
+    decimal HabitableVolumeM3);
+```
+
+### EnvironmentReading
+
+Lectura de ambiente empujada por el escritorio en el sync (CO₂, O₂, presión, temperatura, humedad, luz, ruido, …). El `indicatorId` referencia una entrada de `contracts/indicators.catalog.json`.
+
+```jsonc
+{
+  "id": "0193f…",
+  "recordedAt": "2026-11-14T09:30:00Z",
+  "receivedAt": null,
+  "indicatorId": "co2",
+  "value": 3.2,
+  "secondaryValue": null,
+  "unit": "mmHg",
+  "note": null
+}
+```
+
+```csharp
+public sealed record EnvironmentReading(
+    Guid Id,
+    DateTimeOffset RecordedAt,
+    DateTimeOffset? ReceivedAt,
+    string IndicatorId,
+    decimal Value,
+    decimal? SecondaryValue = null,
+    string? Unit = null,
+    string? Note = null);
+```
+
+### RadiationSummary (v2)
+
+Resumen de radiación de un astronauta: total acumulado, número de entradas, dosis, fuente (CSA) y, en v2, tipo dominante, tasa y % del límite.
+
+```jsonc
+{
+  "totalMsv": 12.84,
+  "entries": 5,
+  "doses": [ { "id": "0193…", "recordedAt": "2026-11-14T09:30:00Z", "receivedAt": null, "doseMsv": 0.42, "note": null } ],
+  "source": { "title": "…", "url": "…" },
+  "type": "gcr",
+  "rate": 0.42,
+  "percentOfLimit": 2.14
+}
+```
+
+```csharp
+public sealed record RadiationSummaryDto(
+    decimal TotalMsv,
+    int Entries,
+    IReadOnlyList<RadiationDoseDto> Doses,
+    SourceLink Source,
+    RadiationType Type = RadiationType.Gcr,
+    decimal Rate = 0m,
+    decimal PercentOfLimit = 0m);
+```
+
+### HazardStatus
+
+Estado (semáforo) de un peligro individual, con explicación en lenguaje simple.
+
+```jsonc
+{
+  "hazard": "spaceRadiation",
+  "status": "watch",
+  "explanation": "Dosis acumulada por encima del 50% del límite de carrera.",
+  "value": 320.0,
+  "limit": 600.0,
+  "unit": "mSv",
+  "source": { "title": "…", "url": "…" }
+}
+```
+
+```csharp
+public sealed record HazardStatus(
+    Hazard Hazard,
+    HealthStatus Status,
+    string Explanation,
+    decimal? Value = null,
+    decimal? Limit = null,
+    string? Unit = null,
+    SourceLink? Source = null);
+```
+
+### RiskStatus
+
+Estado global del astronauta (peor de los peligros) más la lista por peligro y una explicación.
+
+```jsonc
+{
+  "status": "watch",
+  "explanation": "Radiación en watch; el resto de peligros en normal.",
+  "hazards": [
+    { "hazard": "spaceRadiation", "status": "watch", "explanation": "…" },
+    { "hazard": "isolationAndConfinement", "status": "normal", "explanation": "…" }
+  ]
+}
+```
+
+```csharp
+public sealed record RiskStatus(
+    HealthStatus Status,
+    string Explanation,
+    IReadOnlyList<HazardStatus> Hazards);
+```
+
+### PhantomProfile
+
+Perfil de un fantoma digital (sexo, edad, masa) y cambios simulados de hueso, músculo, fluidos e IOP. Todos los cambios son simulados (`CatalogStatus.Heuristic`).
+
+```jsonc
+{
+  "id": "0193g…",
+  "name": "Phantom A",
+  "sex": "female",
+  "ageYears": 35,
+  "massKg": 62.0,
+  "boneChangePercent": -1.2,
+  "muscleChangePercent": -3.4,
+  "fluidChangePercent": 0.8,
+  "iopChangeMmHg": 1.5
+}
+```
+
+```csharp
+public sealed record PhantomProfile(
+    Guid Id,
+    string Name,
+    string Sex,
+    int AgeYears,
+    decimal MassKg,
+    decimal BoneChangePercent = 0m,
+    decimal MuscleChangePercent = 0m,
+    decimal FluidChangePercent = 0m,
+    decimal IopChangeMmHg = 0m);
+```
+
+### CatalogStatus y RadiationType (enums)
+
+Ver arriba. Los umbrales del catálogo (`contracts/indicators.catalog.json`) llevan `source` y `status: verified | heuristic`. `CatalogStatus` refleja ese estado en código. `RadiationType` clasifica una dosis/ambiente: `gcr` (radiación galáctica cósmica), `spe` (evento de partículas solares), `trapped` (radiación atrapada).

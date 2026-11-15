@@ -49,3 +49,16 @@ public enum MessageKind
     Message,
     Report
 }
+
+public enum RadiationType
+{
+    Gcr,
+    Spe,
+    Trapped
+}
+
+public enum CatalogStatus
+{
+    Verified,
+    Heuristic
+}
