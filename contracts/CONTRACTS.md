@@ -791,6 +791,28 @@ PhantomSimulation Phantoms.Simulate(PhantomProfile phantom, decimal gravityG, in
 
 Reglas (todas heuristicas y simuladas): el efecto se escala por `(1 - g)`; hueso y musculo cambian linealmente por semana; fluidos e IOP se acercan a un maximo; el ejercicio reduce el efecto hasta un 60 % con 10 h/semana; las mujeres y los mayores de 50 pierden mas hueso.
 
+### Perfiles de dominio comercial (HB-BE-11, issue #120)
+
+`contracts/indicators.catalog.json` trae `profiles`: `space` (referencia, sin cambios sobre el catálogo) y cuatro perfiles comerciales (`mining`, `antarctica`, `submarine`, `offshore`). Un perfil es un entorno típico (`environment`, mismo formato que `EnvironmentProfile`) más `overrides`: por indicador, las bandas que reemplazan a las del catálogo. Los **5 peligros, los indicadores y las unidades son los del catálogo**; solo cambian los umbrales. Todos los valores son `heuristic` y simulados, con la `source` del perfil (el catálogo valida que las bandas no se solapen ni dejen huecos, y que cada override apunte a un indicador existente).
+
+`GET /api/mc/v1/profiles` (cualquier usuario de Mission Control con sesión) → `DomainProfileDto[]`, con los 5 peligros en cada perfil. `DistanceFromEarth` va vacío: el catálogo no tiene indicadores de ese peligro (el retardo vive en `isolationAndConfinement`).
+
+```csharp
+public sealed record ProfileBandDto(HealthStatus Status, decimal? Min, decimal? Max);   // Min <= value < Max
+public sealed record ProfileIndicatorDto(
+    string IndicatorId, string Name, string Unit, CatalogStatus CatalogStatus, SourceLink Source,
+    bool Overridden, IReadOnlyList<ProfileBandDto> Bands);      // Overridden: umbrales propios del perfil
+public sealed record ProfileHazardDto(Hazard Hazard, IReadOnlyList<ProfileIndicatorDto> Indicators);
+public sealed record DomainProfileDto(
+    string Id, string Name, string Description, EnvironmentProfile Environment,
+    CatalogStatus Status, SourceLink Source, IReadOnlyList<ProfileHazardDto> Hazards, bool Simulated = true);
+
+// Heartbeat.Shared
+IReadOnlyList<DomainProfile> DomainProfiles.All;
+IReadOnlyList<IndicatorCatalogEntry> DomainProfiles.Effective(DomainProfile profile);                       // catálogo con los umbrales del perfil
+IndicatorBand DomainProfiles.Evaluate(DomainProfile profile, string indicatorId, decimal value);            // banda de un valor bajo ese perfil
+```
+
 ### CatalogStatus y RadiationType (enums)
 
 Ver arriba. Los umbrales del catálogo (`contracts/indicators.catalog.json`) llevan `source` y `status: verified | heuristic`. `CatalogStatus` refleja ese estado en código. `RadiationType` clasifica una dosis/ambiente: `gcr` (radiación galáctica cósmica), `spe` (evento de partículas solares), `trapped` (radiación atrapada).
