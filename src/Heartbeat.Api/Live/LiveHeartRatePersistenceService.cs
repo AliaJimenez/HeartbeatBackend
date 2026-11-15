@@ -27,7 +27,9 @@ public sealed class LiveHeartRatePersistenceService(
                         IndicatorType.HeartRate,
                         minute.Median,
                         null,
-                        stoppingToken);
+                        stoppingToken,
+                        // El monitor en vivo aplica la duración sostenida y crea una sola alerta por episodio.
+                        createCriticalAlert: false);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {

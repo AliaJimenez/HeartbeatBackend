@@ -103,6 +103,8 @@ builder.Services.AddSingleton<IHealthEvaluator, HealthEvaluator>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<HeartRateStore>();
 builder.Services.AddSingleton<LiveHeartRateAggregator>();
+builder.Services.Configure<LiveHeartRateOptions>(builder.Configuration.GetSection("LiveHeartRate"));
+builder.Services.AddSingleton<LiveHeartRateMonitor>();
 builder.Services.AddScoped<WearableReadingWriter>();
 builder.Services.AddHostedService<LiveHeartRatePersistenceService>();
 

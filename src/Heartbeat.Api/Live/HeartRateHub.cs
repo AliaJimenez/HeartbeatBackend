@@ -6,9 +6,9 @@ using Microsoft.AspNetCore.SignalR;
 namespace Heartbeat.Api.Live;
 
 /// <summary>
-/// Hub de solo difusión: el servidor envía el evento <c>HeartRate</c> con cada lectura del reloj, solo al grupo del
-/// astronauta dueño del reloj. Exige token (en WebSockets, <c>?access_token=</c>). Un tripulante recibe el suyo; MC con
-/// <c>vitals.view</c> elige uno con <c>?astronautId=</c>.
+/// Hub de solo difusión: el servidor envía <c>HeartRate</c> y su evaluación <c>HeartRateStatus</c> con cada lectura,
+/// solo al grupo del astronauta dueño del reloj. Exige token (en WebSockets, <c>?access_token=</c>). Un tripulante
+/// recibe el suyo; MC con <c>vitals.view</c> elige uno con <c>?astronautId=</c>.
 /// </summary>
 [Authorize(Policy = AuthConstants.AstronautDataPolicy)]
 public sealed class HeartRateHub(AppDbContext db) : Hub
