@@ -55,6 +55,14 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             .HasMaxLength(Reading.DeviceIdMaxLength);
 
         builder.Entity<Reading>()
+            .Property(r => r.ExternalId)
+            .HasMaxLength(Reading.ExternalIdMaxLength);
+
+        builder.Entity<Reading>()
+            .HasIndex(r => r.ExternalId)
+            .IsUnique();
+
+        builder.Entity<Reading>()
             .HasOne(r => r.CheckUp)
             .WithMany(c => c.Readings)
             .HasForeignKey(r => r.CheckUpId);

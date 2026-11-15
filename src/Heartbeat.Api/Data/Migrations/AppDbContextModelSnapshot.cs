@@ -423,6 +423,10 @@ namespace Heartbeat.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Indicator")
                         .HasColumnType("INTEGER");
 
@@ -441,6 +445,9 @@ namespace Heartbeat.Api.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CheckUpId");
+
+                    b.HasIndex("ExternalId")
+                        .IsUnique();
 
                     b.ToTable("Readings");
                 });

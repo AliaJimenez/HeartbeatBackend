@@ -13,6 +13,12 @@ public sealed class WatchSyncOptions
 
     public string Password { get; set; } = "";
 
+    /// <summary>Frecuencia del importador de sueño y presión arterial. Un fallo se reintenta en la vuelta siguiente.</summary>
+    public int ImportIntervalMinutes { get; set; } = 5;
+
+    /// <summary>Ventana que se vuelve a consultar; los ids externos hacen que repetirla sea idempotente.</summary>
+    public int ImportLookbackDays { get; set; } = 3;
+
     /// <summary>
     /// Cuentas de WatchSync por astronauta (opcional), con el <c>UserName</c> del astronauta como clave:
     /// <c>WatchSync:Accounts:a.rivera:Email</c> y <c>...:Password</c> (user-secrets o variables de entorno).

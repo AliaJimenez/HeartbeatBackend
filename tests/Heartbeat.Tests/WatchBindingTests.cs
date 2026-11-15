@@ -118,11 +118,11 @@ public class WatchBindingTests : IDisposable
         return (await res.Content.ReadFromJsonAsync<WatchRegisteredDto>(Json))!.Key;
     }
 
-    private async Task<HttpResponseMessage> PostReadingAsync(string? key, int bpm = 72)
+    private async Task<HttpResponseMessage> PostReadingAsync(string? key, int bpm = 72, DateTimeOffset? measuredAt = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/heartrate")
         {
-            Content = JsonContent.Create(new HeartRateReading(bpm, DateTimeOffset.UtcNow, "test"), options: Json),
+            Content = JsonContent.Create(new HeartRateReading(bpm, measuredAt ?? DateTimeOffset.UtcNow, "test"), options: Json),
         };
         if (key is not null)
         {
@@ -258,6 +258,28 @@ public class WatchBindingTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, (await PostReadingAsync(key, LiveEndpoints.MinBpm - 1)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await PostReadingAsync(key, LiveEndpoints.MaxBpm + 1)).StatusCode);
         Assert.Null(await LatestOf(_anaId));
+    }
+
+    [Fact]
+    public async Task A_completed_live_minute_is_stored_as_one_wearable_median_reading()
+    {
+        var key = await RegisterAsync(_anaId, "galaxy-ana");
+        var minute = new DateTimeOffset(2026, 11, 15, 12, 30, 0, TimeSpan.Zero);
+
+        Assert.Equal(HttpStatusCode.OK, (await PostReadingAsync(key, 60, minute.AddSeconds(5))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PostReadingAsync(key, 80, minute.AddSeconds(40))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PostReadingAsync(key, 75, minute.AddMinutes(1))).StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var stored = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Readings
+            .Include(r => r.CheckUp)
+            .SingleAsync();
+        Assert.Equal(IndicatorType.HeartRate, stored.Indicator);
+        Assert.Equal(70m, stored.Value);
+        Assert.Equal(ReadingSource.Wearable, stored.Source);
+        Assert.Equal("galaxy-ana", stored.DeviceId);
+        Assert.Equal(minute, stored.CheckUp.RecordedAt);
+        Assert.StartsWith("live-heart-rate:", stored.ExternalId);
     }
 
     private async Task<HeartRateReading?> LatestOf(Guid astronautId)
