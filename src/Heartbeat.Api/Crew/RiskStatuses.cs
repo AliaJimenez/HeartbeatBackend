@@ -15,7 +15,8 @@ public static class RiskStatuses
         Guid astronautId,
         decimal hoursWithoutContact,
         decimal continuousStayHours,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        DomainProfile? domain = null)
     {
         var vitals = await LoadVitalsAsync(db, astronautId, cancellationToken);
         var radiation = await RadiationSummaries.LoadAsync(db, astronautId, cancellationToken);
@@ -27,7 +28,7 @@ public static class RiskStatuses
             .Where(a => a.Id == astronautId)
             .Select(a => a.Mission)
             .FirstOrDefaultAsync(cancellationToken);
-        var missionDto = mission is null ? null : McMissionEndpoints.ToDto(mission, hoursWithoutContact, continuousStayHours);
+        var missionDto = mission is null ? null : McMissionEndpoints.ToDto(mission, hoursWithoutContact, continuousStayHours, domain);
 
         return RiskEngine.Evaluate(new RiskInputs(
             vitals,
@@ -35,7 +36,8 @@ public static class RiskStatuses
             environment,
             missionDto?.EnvironmentProfile,
             missionDto?.Indices,
-            Vision: vision));
+            Vision: vision,
+            Domain: domain));
     }
 
     // The newest value of each vital sign across the astronaut's check-ups (corrected check-ups are replaced by

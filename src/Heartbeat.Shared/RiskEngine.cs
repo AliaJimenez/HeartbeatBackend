@@ -14,7 +14,8 @@ public sealed record RiskInputs(
     EnvironmentProfile? Profile = null,
     IsolationConfinementIndices? Isolation = null,
     IReadOnlyList<PersonalDeviation>? Deviations = null,
-    IReadOnlyList<EnvironmentReadingStatus>? Vision = null);   // latest IOP and visual acuity (HB-BE-05)
+    IReadOnlyList<EnvironmentReadingStatus>? Vision = null,    // latest IOP and visual acuity (HB-BE-05)
+    DomainProfile? Domain = null);                             // commercial profile (HB-BE-11): its thresholds replace the catalog's
 
 /// <summary>
 /// HB-BE-07: one green / yellow / red per NASA hazard and one global (the worst), each with a plain-language reason
@@ -32,22 +33,30 @@ public static class RiskEngine
     /// </summary>
     public const HealthStatus PlannedConditionCap = HealthStatus.Watch;
 
+    /// <summary>
+    /// With <see cref="RiskInputs.Domain"/> the habitat and vision readings, the isolation indices and the planned
+    /// gravity and delay are judged with that profile's thresholds. Vitals (reference-ranges.json) and radiation
+    /// limits are not profile thresholds and stay the same. The inputs are not changed: readings are re-judged here.
+    /// </summary>
     public static RiskStatus Evaluate(RiskInputs inputs)
     {
         var vitals = VitalFindings(inputs.Vitals);
+        var domain = inputs.Domain;
+        var environment = inputs.Environment?.Select(r => DomainProfiles.Apply(domain, r)).ToList();
+        var vision = inputs.Vision?.Select(r => DomainProfiles.Apply(domain, r)).ToList();
 
         var hazards = new List<HazardStatus>
         {
             Radiation(inputs.Radiation, vitals),
-            IsolationAndConfinement(inputs.Isolation, vitals),
-            DistanceFromEarth(inputs.Profile, vitals),
-            GravityFields(inputs.Profile, inputs.Vision, vitals),
-            HostileClosedEnvironment(inputs.Environment, vitals),
+            IsolationAndConfinement(inputs.Isolation, vitals, domain),
+            DistanceFromEarth(inputs.Profile, vitals, domain),
+            GravityFields(inputs.Profile, vision, vitals, domain),
+            HostileClosedEnvironment(environment, vitals, domain),
         };
         hazards.Sort((a, b) => a.Hazard.CompareTo(b.Hazard));
 
         var status = hazards.Max(h => h.Status);
-        return new RiskStatus(status, GlobalExplanation(hazards, status), hazards, inputs.Deviations, inputs.Isolation);
+        return new RiskStatus(status, GlobalExplanation(hazards, status), hazards, inputs.Deviations, inputs.Isolation, domain?.Id);
     }
 
     public static string Name(Hazard hazard) => hazard switch
@@ -169,22 +178,23 @@ public static class RiskEngine
         return Build(Hazard.SpaceRadiation, findings, normal);
     }
 
-    private static HazardStatus IsolationAndConfinement(IsolationConfinementIndices? indices, Dictionary<Hazard, List<Finding>> vitals)
+    private static HazardStatus IsolationAndConfinement(
+        IsolationConfinementIndices? indices, Dictionary<Hazard, List<Finding>> vitals, DomainProfile? domain)
     {
         var findings = VitalsOf(vitals, Hazard.IsolationAndConfinement).ToList();
         if (indices is not null)
         {
-            var hazard = IsolationConfinement.ToHazardStatus(indices);
+            var hazard = IsolationConfinement.ToHazardStatus(indices, domain);
             findings.Add(new Finding("Isolation indices", hazard.Status, hazard.Explanation, hazard.Value, hazard.Limit, hazard.Unit, hazard.Source));
         }
 
         return Build(Hazard.IsolationAndConfinement, findings, "Sleep, mood and isolation are within their usual ranges.");
     }
 
-    private static HazardStatus DistanceFromEarth(EnvironmentProfile? profile, Dictionary<Hazard, List<Finding>> vitals)
+    private static HazardStatus DistanceFromEarth(EnvironmentProfile? profile, Dictionary<Hazard, List<Finding>> vitals, DomainProfile? domain)
     {
         var findings = VitalsOf(vitals, Hazard.DistanceFromEarth).ToList();
-        if (profile is not null && IndicatorsCatalog.Find("commDelay") is { } entry)
+        if (profile is not null && DomainProfiles.EntryFor(domain, "commDelay") is { } entry)
         {
             var delay = IsolationConfinement.CommDelayMinutes(profile.DistanceKm);
             var band = IndicatorsCatalog.Evaluate(entry, delay);
@@ -199,10 +209,10 @@ public static class RiskEngine
     }
 
     private static HazardStatus GravityFields(
-        EnvironmentProfile? profile, IReadOnlyList<EnvironmentReadingStatus>? vision, Dictionary<Hazard, List<Finding>> vitals)
+        EnvironmentProfile? profile, IReadOnlyList<EnvironmentReadingStatus>? vision, Dictionary<Hazard, List<Finding>> vitals, DomainProfile? domain)
     {
         var findings = VitalsOf(vitals, Hazard.GravityFields).ToList();
-        if (profile is not null && IndicatorsCatalog.Find("gravity") is { } entry)
+        if (profile is not null && DomainProfiles.EntryFor(domain, "gravity") is { } entry)
         {
             var band = IndicatorsCatalog.Evaluate(entry, profile.GravityG);
             var status = Cap(band.Status);
@@ -214,7 +224,7 @@ public static class RiskEngine
 
         foreach (var r in vision ?? [])
         {
-            var limit = IndicatorsCatalog.Find(r.IndicatorId) is { } e ? NormalEdge(e, r.Value) : null;
+            var limit = DomainProfiles.EntryFor(domain, r.IndicatorId) is { } e ? NormalEdge(e, r.Value) : null;
             var text = r.Status == HealthStatus.Normal
                 ? $"{r.Name} is {r.Value:0.##} {r.Unit}."
                 : $"{r.Name} is {r.Label.ToLowerInvariant()}: {r.Value:0.##} {r.Unit} (simulated reading).";
@@ -225,12 +235,12 @@ public static class RiskEngine
     }
 
     private static HazardStatus HostileClosedEnvironment(
-        IReadOnlyList<EnvironmentReadingStatus>? readings, Dictionary<Hazard, List<Finding>> vitals)
+        IReadOnlyList<EnvironmentReadingStatus>? readings, Dictionary<Hazard, List<Finding>> vitals, DomainProfile? domain)
     {
         var findings = VitalsOf(vitals, Hazard.HostileClosedEnvironment).ToList();
         foreach (var r in readings ?? [])
         {
-            var entry = IndicatorsCatalog.Find(r.IndicatorId);
+            var entry = DomainProfiles.EntryFor(domain, r.IndicatorId);
             var limit = entry is null ? null : NormalEdge(entry, r.Value);
             var text = r.Status == HealthStatus.Normal
                 ? $"{r.Name} is {r.Value:0.##} {r.Unit}."

@@ -105,14 +105,15 @@ public static class IsolationConfinement
     public static IsolationConfinementIndices Evaluate(
         EnvironmentProfile profile,
         decimal hoursWithoutContact = 0m,
-        decimal continuousStayHours = 0m)
+        decimal continuousStayHours = 0m,
+        DomainProfile? domain = null)
     {
         var isolation = IsolationIndex(
             CommDelayMinutes(profile.DistanceKm), profile.DistanceKm, profile.CrewSize, hoursWithoutContact);
         var confinement = ConfinementIndex(profile.HabitableVolumeM3, profile.CrewSize, continuousStayHours);
 
-        var isolationDto = ToDto(IsolationIndicatorId, isolation);
-        var confinementDto = ToDto(ConfinementIndicatorId, confinement);
+        var isolationDto = ToDto(IsolationIndicatorId, isolation, domain);
+        var confinementDto = ToDto(ConfinementIndicatorId, confinement, domain);
 
         return new IsolationConfinementIndices(
             isolationDto,
@@ -122,9 +123,9 @@ public static class IsolationConfinement
             continuousStayHours);
     }
 
-    private static IsolationConfinementIndexDto ToDto(string indicatorId, decimal value)
+    private static IsolationConfinementIndexDto ToDto(string indicatorId, decimal value, DomainProfile? domain)
     {
-        var entry = IndicatorsCatalog.Find(indicatorId)
+        var entry = DomainProfiles.EntryFor(domain, indicatorId)
             ?? throw new InvalidOperationException($"The indicators catalog has no '{indicatorId}' entry.");
         var band = IndicatorsCatalog.Evaluate(entry, value);
         return new IsolationConfinementIndexDto(
@@ -148,10 +149,10 @@ public static class IsolationConfinement
     /// The <see cref="Hazard.IsolationAndConfinement"/> traffic light built from the two indices: the worse of
     /// their statuses, with the worse index as value and the start of its critical band as limit.
     /// </summary>
-    public static HazardStatus ToHazardStatus(IsolationConfinementIndices indices)
+    public static HazardStatus ToHazardStatus(IsolationConfinementIndices indices, DomainProfile? domain = null)
     {
         var worse = indices.Confinement.Status > indices.Isolation.Status ? indices.Confinement : indices.Isolation;
-        var critical = IndicatorsCatalog.Find(worse.IndicatorId)?.Bands
+        var critical = DomainProfiles.EntryFor(domain, worse.IndicatorId)?.Bands
             .FirstOrDefault(b => b.Status == HealthStatus.Critical)?.Min;
 
         var explanation = indices.Status == HealthStatus.Normal

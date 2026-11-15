@@ -108,11 +108,21 @@ public static class McVitalsEndpoints
     }
 
     private static async Task<IResult> GetRiskAsync(
-        Guid id, AppDbContext db, CancellationToken ct, decimal hoursWithoutContact = 0m, decimal continuousStayHours = 0m)
+        Guid id, AppDbContext db, CancellationToken ct, decimal hoursWithoutContact = 0m, decimal continuousStayHours = 0m, string? profile = null)
     {
         if (Crew.McMissionEndpoints.ValidateHours(hoursWithoutContact, continuousStayHours) is { } invalid)
         {
             return invalid;
+        }
+
+        // HB-BE-11: the thresholds of a domain profile instead of the standard catalog; omitted = standard.
+        var domain = DomainProfiles.Find(profile);
+        if (profile is not null && domain is null)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["profile"] = [$"profile must be one of: {string.Join(", ", DomainProfiles.All.Select(p => p.Id))}."],
+            });
         }
 
         if (!await db.Astronauts.AnyAsync(a => a.Id == id, ct))
@@ -120,7 +130,7 @@ public static class McVitalsEndpoints
             return AstronautNotFound();
         }
 
-        return Results.Ok(await Crew.RiskStatuses.LoadAsync(db, id, hoursWithoutContact, continuousStayHours, ct));
+        return Results.Ok(await Crew.RiskStatuses.LoadAsync(db, id, hoursWithoutContact, continuousStayHours, ct, domain));
     }
 
     private static async Task<IResult> GetEnvironmentAsync(
