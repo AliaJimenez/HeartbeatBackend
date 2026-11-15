@@ -65,7 +65,7 @@ public static class McAlertsEndpoints
         // SQLite cannot ORDER BY DateTimeOffset in SQL, so newest-first ordering and paging happen in memory.
         var all = await query
             .Select(a => new Row(a.Id, a.AstronautId, a.Astronaut.DisplayName, a.CheckUpId, a.Indicators,
-                a.CreatedAt, a.AcknowledgedAt, a.AcknowledgedByUserId, a.AcknowledgeNote))
+                a.CreatedAt, a.AcknowledgedAt, a.AcknowledgedByUserId, a.AcknowledgeNote, a.Kind, a.RadiationDoseId, a.Message))
             .ToListAsync(ct);
 
         var pageRows = all.OrderByDescending(r => r.CreatedAt).Skip((page - 1) * pageSize).Take(pageSize).ToList();
@@ -115,13 +115,14 @@ public static class McAlertsEndpoints
 
         return Results.Ok(ToDto(
             new Row(alert.Id, alert.AstronautId, alert.Astronaut.DisplayName, alert.CheckUpId, alert.Indicators,
-                alert.CreatedAt, alert.AcknowledgedAt, userId, note),
+                alert.CreatedAt, alert.AcknowledgedAt, userId, note, alert.Kind, alert.RadiationDoseId, alert.Message),
             new Dictionary<Guid, string> { [userId] = user.DisplayName }));
     }
 
     private sealed record Row(
-        Guid Id, Guid AstronautId, string AstronautName, Guid CheckUpId, string Indicators,
-        DateTimeOffset CreatedAt, DateTimeOffset? AcknowledgedAt, Guid? AcknowledgedByUserId, string? AcknowledgeNote);
+        Guid Id, Guid AstronautId, string AstronautName, Guid? CheckUpId, string Indicators,
+        DateTimeOffset CreatedAt, DateTimeOffset? AcknowledgedAt, Guid? AcknowledgedByUserId, string? AcknowledgeNote,
+        AlertKind Kind, Guid? RadiationDoseId, string? Message);
 
     private static async Task<Dictionary<Guid, string>> NamesAsync(AppDbContext db, IEnumerable<Guid?> ids, CancellationToken ct)
     {
@@ -140,7 +141,10 @@ public static class McAlertsEndpoints
         r.CreatedAt,
         r.AcknowledgedAt,
         r.AcknowledgedByUserId is { } by ? names.GetValueOrDefault(by, "Unknown user") : null,
-        r.AcknowledgeNote);
+        r.AcknowledgeNote,
+        r.Kind,
+        r.RadiationDoseId,
+        r.Message);
 
     // Stored as a comma-separated list of IndicatorType names (written by the sync endpoint).
     private static List<IndicatorType> ParseIndicators(string stored)

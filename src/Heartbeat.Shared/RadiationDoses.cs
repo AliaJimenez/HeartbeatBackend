@@ -53,6 +53,16 @@ public static class RadiationDoses
     public static RadiationType Classify(decimal doseMsv, bool isSolarEvent) =>
         isSolarEvent ? RadiationType.Spe : RadiationType.Gcr;
 
+    // Stored in Alert.Indicators for radiation alerts (they have no IndicatorType).
+    public const string AlertSpe = "radiation-spe";
+    public const string AlertCumulative = "radiation-cumulative";
+
+    public static string SpeAlertMessage(decimal doseMsv) =>
+        $"Solar particle event (simulated): {doseMsv:0.##} mSv, {PercentOfSpeLimit(doseMsv):0.#}% of the {SpeLimitMsv:0} mSv per-event limit.";
+
+    public static string CumulativeAlertMessage(decimal totalMsv) =>
+        $"Cumulative radiation (simulated) reached {totalMsv:0.##} mSv, {PercentOfCareerLimit(totalMsv):0.#}% of the {CareerLimitMsv:0} mSv career limit.";
+
     public static decimal PercentOfCareerLimit(decimal totalMsv) =>
         CareerLimitMsv == 0 ? 0 : Math.Round(totalMsv / CareerLimitMsv * 100m, 2, MidpointRounding.AwayFromZero);
 
@@ -65,6 +75,8 @@ public static class RadiationDoses
         >= 50 => HealthStatus.Watch,
         _ => HealthStatus.Normal,
     };
+
+    public static HealthStatus WorstOf(HealthStatus a, HealthStatus b) => (HealthStatus)Math.Max((int)a, (int)b);
 
     public static HealthStatus StatusForSpePercent(decimal percent) => percent switch
     {

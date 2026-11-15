@@ -66,7 +66,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         builder.Entity<Alert>()
             .HasOne(a => a.CheckUp)
             .WithOne(c => c.Alert)
-            .HasForeignKey<Alert>(a => a.CheckUpId);
+            .HasForeignKey<Alert>(a => a.CheckUpId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.Entity<RadiationDose>(e =>
         {

@@ -35,7 +35,7 @@ namespace Heartbeat.Api.Data.Migrations
                     b.Property<Guid>("AstronautId")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("CheckUpId")
+                    b.Property<Guid?>("CheckUpId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -43,6 +43,15 @@ namespace Heartbeat.Api.Data.Migrations
 
                     b.Property<string>("Indicators")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RadiationDoseId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -604,8 +613,7 @@ namespace Heartbeat.Api.Data.Migrations
                     b.HasOne("Heartbeat.Api.Data.Entities.CheckUp", "CheckUp")
                         .WithOne("Alert")
                         .HasForeignKey("Heartbeat.Api.Data.Entities.Alert", "CheckUpId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Astronaut");
 
