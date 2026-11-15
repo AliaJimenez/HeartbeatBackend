@@ -20,8 +20,19 @@ public static class McVitalsEndpoints
         group.MapGet("/checkups", ListCheckUpsAsync).RequirePermission(Permissions.VitalsHistory);
         group.MapGet("/checkups/{checkUpId:guid}", GetCheckUpAsync).RequirePermission(Permissions.VitalsView);
         group.MapGet("/series", GetSeriesAsync).RequirePermission(Permissions.VitalsHistory);
+        group.MapGet("/radiation", GetRadiationAsync).RequirePermission(Permissions.VitalsView);
 
         return app;
+    }
+
+    private static async Task<IResult> GetRadiationAsync(Guid id, AppDbContext db, CancellationToken ct)
+    {
+        if (!await db.Astronauts.AnyAsync(a => a.Id == id, ct))
+        {
+            return AstronautNotFound();
+        }
+
+        return Results.Ok(await Crew.RadiationSummaries.LoadAsync(db, id, ct));
     }
 
     // SQLite cannot compare or ORDER BY DateTimeOffset in SQL, so check-ups are filtered, ordered and paged in

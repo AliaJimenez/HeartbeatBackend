@@ -298,6 +298,35 @@ namespace Heartbeat.Api.Data.Migrations
                     b.ToTable("PortalUsers");
                 });
 
+            modelBuilder.Entity("Heartbeat.Api.Data.Entities.RadiationDose", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AstronautId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("DoseMsv")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ReceivedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AstronautId");
+
+                    b.ToTable("RadiationDoses");
+                });
+
             modelBuilder.Entity("Heartbeat.Api.Data.Entities.Reading", b =>
                 {
                     b.Property<Guid>("Id")
@@ -561,6 +590,17 @@ namespace Heartbeat.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("Heartbeat.Api.Data.Entities.RadiationDose", b =>
+                {
+                    b.HasOne("Heartbeat.Api.Data.Entities.Astronaut", "Astronaut")
+                        .WithMany()
+                        .HasForeignKey("AstronautId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Astronaut");
                 });
 
             modelBuilder.Entity("Heartbeat.Api.Data.Entities.Reading", b =>
