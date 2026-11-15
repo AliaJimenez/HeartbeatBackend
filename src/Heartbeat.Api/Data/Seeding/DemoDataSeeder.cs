@@ -209,6 +209,10 @@ public sealed class DemoDataSeeder(IConfiguration configuration, ILogger<DemoDat
         var lastRecorded = LastCheckUpTime(now, plan.CheckUpTime);
         var checkUpsByDay = new Dictionary<int, CheckUp>();
 
+        // Per-environment hazard values for the simulated stories (all flagged simulated = true).
+        var environment = mission.EnvironmentType ?? mission.Environment;
+        var radiationRate = RadiationDoses.RateForEnvironment(environment);
+
         for (var day = 1; day <= Days; day++)
         {
             var data = plan.Day(day);
@@ -263,7 +267,116 @@ public sealed class DemoDataSeeder(IConfiguration configuration, ILogger<DemoDat
             }
         }
 
+        // Simulated environment readings for the habitat (CO2 spike, temperature, humidity, light, noise, O2, pressure).
+        SeedEnvironmentReadings(db, mission, id, lastRecorded, now);
+
+        // Simulated radiation doses: a steady GCR background plus a single SPE on day 20 for Leila.
+        SeedRadiationDoses(db, id, lastRecorded, radiationRate, plan.UserName == "l.haddad", now);
+
+        // Simulated IOP / PVT-B readings are stored as environment readings keyed by indicator id.
+        SeedSimulatedIndicators(db, id, lastRecorded, plan, now);
+
         AddStoryMessages(db, plan, id, surgeon, checkUpsByDay, now);
+    }
+
+    // ----- Simulated data for the new hazards (HB-DA-02). All rows are marked simulated = true. -----
+
+    private static void SeedEnvironmentReadings(AppDbContext db, Mission mission, Guid astronautId, DateTimeOffset lastRecorded, DateTimeOffset now)
+    {
+        // Deterministic pseudo-random based on a fixed seed so the demo is reproducible.
+        var rng = new Random(42);
+        var missionId = mission.Id;
+
+        for (var day = 1; day <= Days; day++)
+        {
+            var recordedAt = lastRecorded.AddDays(day - Days);
+            var receivedAt = Earlier(recordedAt.AddMinutes(3), now);
+
+            // CO2 spike on day 20 (simulated event).
+            var co2 = day == 20 ? 5.6m : 2.4m + (decimal)(rng.NextDouble() * 0.6 - 0.3);
+            AddEnvironmentReading(db, missionId, astronautId, "co2", Math.Round(co2, 2), "mmHg", recordedAt, receivedAt, true);
+
+            AddEnvironmentReading(db, missionId, astronautId, "o2", 162m + (decimal)(rng.NextDouble() * 6 - 3), "mmHg", recordedAt, receivedAt, true);
+            AddEnvironmentReading(db, missionId, astronautId, "pressure", 101.3m + (decimal)(rng.NextDouble() * 2 - 1), "kPa", recordedAt, receivedAt, true);
+            AddEnvironmentReading(db, missionId, astronautId, "temperature", 21.5m + (decimal)(rng.NextDouble() * 1.5 - 0.75), "°C", recordedAt, receivedAt, true);
+            AddEnvironmentReading(db, missionId, astronautId, "humidity", 45m + (decimal)(rng.NextDouble() * 10 - 5), "%", recordedAt, receivedAt, true);
+            AddEnvironmentReading(db, missionId, astronautId, "light", 320m + (decimal)(rng.NextDouble() * 80 - 40), "lux", recordedAt, receivedAt, true);
+            AddEnvironmentReading(db, missionId, astronautId, "noise", 52m + (decimal)(rng.NextDouble() * 8 - 4), "dB", recordedAt, receivedAt, true);
+        }
+    }
+
+    private static void SeedRadiationDoses(AppDbContext db, Guid astronautId, DateTimeOffset lastRecorded, decimal rate, bool hasSpe, DateTimeOffset now)
+    {
+        // Steady GCR background: one dose per week at the environment rate.
+        for (var week = 1; week <= 4; week++)
+        {
+            var recordedAt = lastRecorded.AddDays(week * 7 - Days);
+            db.RadiationDoses.Add(new RadiationDose
+            {
+                Id = Guid.CreateVersion7(),
+                AstronautId = astronautId,
+                RecordedAt = recordedAt,
+                ReceivedAt = Earlier(recordedAt.AddMinutes(5), now),
+                DoseMsv = Math.Round(rate * 7m, 2),
+                Type = RadiationType.Gcr,
+                Note = "GCR background",
+            });
+        }
+
+        // A single SPE on day 20 (only for Leila's story).
+        if (hasSpe)
+        {
+            var recordedAt = lastRecorded.AddDays(20 - Days);
+            db.RadiationDoses.Add(new RadiationDose
+            {
+                Id = Guid.CreateVersion7(),
+                AstronautId = astronautId,
+                RecordedAt = recordedAt,
+                ReceivedAt = Earlier(recordedAt.AddMinutes(5), now),
+                DoseMsv = 180m,
+                Type = RadiationType.Spe,
+                Note = "Solar particle event",
+            });
+        }
+    }
+
+    private static void SeedSimulatedIndicators(AppDbContext db, Guid astronautId, DateTimeOffset lastRecorded, AstronautPlan plan, DateTimeOffset now)
+    {
+        // IOP and PVT-B as environment readings keyed by their indicator id. A sleep-deprivation streak
+        // for Kenji over the last 14 days raises PVT-B (slower reaction time).
+        var rng = new Random(7);
+        bool sleepDeprived = plan.UserName == "k.sato";
+
+        for (var day = 1; day <= Days; day++)
+        {
+            var recordedAt = lastRecorded.AddDays(day - Days);
+            var receivedAt = Earlier(recordedAt.AddMinutes(4), now);
+
+            var progress = sleepDeprived && day > Days - 14 ? (day - (Days - 14)) / 14.0 : 0.0;
+            var iop = 14m + (decimal)(rng.NextDouble() * 4 - 2);
+            var pvt = 320m + (decimal)(rng.NextDouble() * 20 - 10) + (decimal)(40 * progress);
+
+            AddEnvironmentReading(db, missionId: null, astronautId, "iop", Math.Round(iop, 1), "mmHg", recordedAt, receivedAt, true);
+            AddEnvironmentReading(db, missionId: null, astronautId, "pvtb", Math.Round(pvt, 0), "ms", recordedAt, receivedAt, true);
+        }
+    }
+
+    private static void AddEnvironmentReading(
+        AppDbContext db, Guid? missionId, Guid? astronautId, string indicatorId, decimal value, string unit,
+        DateTimeOffset recordedAt, DateTimeOffset receivedAt, bool simulated)
+    {
+        db.EnvironmentReadings.Add(new Heartbeat.Api.Data.Entities.EnvironmentReading
+        {
+            Id = Guid.CreateVersion7(),
+            MissionId = missionId,
+            AstronautId = astronautId,
+            IndicatorId = indicatorId,
+            Value = value,
+            Unit = unit,
+            RecordedAt = recordedAt,
+            ReceivedAt = receivedAt,
+            Simulated = simulated,
+        });
     }
 
     private static void AddStoryMessages(
