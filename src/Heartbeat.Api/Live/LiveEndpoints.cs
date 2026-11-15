@@ -1,5 +1,7 @@
 using Heartbeat.Api.Auth;
 using Heartbeat.Api.Data;
+using Heartbeat.Api.Data.Entities;
+using Heartbeat.Shared;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -31,6 +33,7 @@ public static class LiveEndpoints
         AppDbContext db,
         HeartRateStore store,
         LiveHeartRateAggregator aggregator,
+        LiveHeartRateMonitor monitor,
         WearableReadingWriter writer,
         IHubContext<HeartRateHub> hubContext,
         CancellationToken ct)
@@ -56,6 +59,7 @@ public static class LiveEndpoints
             return Results.BadRequest(new { error = "bpm fuera de rango" });
         }
 
+        var observation = monitor.Observe(watch.Id, r);
         store.For(watch.AstronautId).Add(r);
         if (aggregator.Add(watch.Id, watch.AstronautId, watch.DeviceId, r) is { } completed)
         {
@@ -67,10 +71,35 @@ public static class LiveEndpoints
                 Heartbeat.Shared.IndicatorType.HeartRate,
                 completed.Median,
                 null,
-                ct);
+                ct,
+                createCriticalAlert: false);
+        }
+
+        if (observation.ShouldCreateAlert)
+        {
+            db.Alerts.Add(new Alert
+            {
+                Id = Guid.CreateVersion7(),
+                AstronautId = watch.AstronautId,
+                Indicators = IndicatorType.HeartRate.ToString(),
+                Message = $"Heart rate remained critical for the configured duration ({r.Bpm} bpm).",
+                CreatedAt = DateTimeOffset.UtcNow,
+            });
+
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch
+            {
+                monitor.ReleaseAlertReservation(watch.Id, observation.CriticalSince!.Value);
+                throw;
+            }
         }
 
         await hubContext.Clients.Group(HeartRateHub.GroupFor(watch.AstronautId)).SendAsync("HeartRate", r, ct);
+        await hubContext.Clients.Group(HeartRateHub.GroupFor(watch.AstronautId))
+            .SendAsync("HeartRateStatus", observation.Event, ct);
         return Results.Ok();
     }
 

@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Heartbeat.Api.Live;
 
-/// <summary>Persiste una medición del reloj como un check-up de una lectura, la evalúa y levanta su alerta.</summary>
+/// <summary>Persiste una medición del reloj como un check-up de una lectura, la evalúa y opcionalmente levanta su alerta.</summary>
 public sealed class WearableReadingWriter(AppDbContext db, IHealthEvaluator evaluator)
 {
     public async Task<bool> SaveAsync(
@@ -16,7 +16,8 @@ public sealed class WearableReadingWriter(AppDbContext db, IHealthEvaluator eval
         IndicatorType indicator,
         decimal value,
         decimal? secondaryValue,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool createCriticalAlert = true)
     {
         if (await db.Readings.AnyAsync(r => r.ExternalId == externalId, ct))
         {
@@ -56,7 +57,7 @@ public sealed class WearableReadingWriter(AppDbContext db, IHealthEvaluator eval
         });
         db.CheckUps.Add(checkUp);
 
-        if (evaluation.Status == HealthStatus.Critical)
+        if (createCriticalAlert && evaluation.Status == HealthStatus.Critical)
         {
             db.Alerts.Add(new Alert
             {
