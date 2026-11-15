@@ -25,6 +25,7 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
 
 builder.Services.AddSingleton<Heartbeat.Api.Vitals.RangesCatalog>();
+builder.Services.AddSingleton<Heartbeat.Api.Vitals.IndicatorsCatalog>();
 builder.Services.AddScoped<IDataSeeder, DemoDataSeeder>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>

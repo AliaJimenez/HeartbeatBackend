@@ -249,7 +249,8 @@ public static class McCrewEndpoints
         a.UserName,
         a.DisplayName,
         a.CallSign,
-        new MissionInfo(a.Mission.Id, a.Mission.Name, a.Mission.Environment, a.Mission.StartsAt),
+        new MissionInfo(a.Mission.Id, a.Mission.Name, a.Mission.Environment, a.Mission.StartsAt,
+            new EnvironmentProfile(a.Mission.EnvironmentType ?? a.Mission.Environment, a.Mission.GravityG, a.Mission.DistanceKm, a.Mission.CrewSize, a.Mission.HabitableVolumeM3)),
         a.DateOfBirth,
         a.Notes,
         a.UpdatedAt);
