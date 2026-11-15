@@ -11,7 +11,8 @@ public sealed record IndicatorCatalogEntry(
     Hazard Hazard,
     string Source,
     CatalogStatus Status,
-    IReadOnlyList<IndicatorBand> Bands);
+    IReadOnlyList<IndicatorBand> Bands,
+    decimal BaselineThreshold = 2m);
 
 public static class IndicatorsCatalog
 {
@@ -65,6 +66,8 @@ public static class IndicatorsCatalog
                     b.TryGetProperty("label", out var label) ? (label.GetString() ?? string.Empty) : string.Empty));
             }
 
+            var baselineThreshold = ind.TryGetProperty("baselineThreshold", out var bt) ? bt.GetDecimal() : 2m;
+
             entries.Add(new IndicatorCatalogEntry(
                 ind.GetProperty("id").GetString()!,
                 ind.GetProperty("name").GetString()!,
@@ -72,7 +75,8 @@ public static class IndicatorsCatalog
                 Enum.Parse<Hazard>(ind.GetProperty("hazard").GetString()!, ignoreCase: true),
                 ind.GetProperty("source").GetString()!,
                 Enum.Parse<CatalogStatus>(ind.GetProperty("status").GetString()!, ignoreCase: true),
-                bands));
+                bands,
+                baselineThreshold));
         }
 
         if (entries.Count == 0)

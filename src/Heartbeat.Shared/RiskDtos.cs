@@ -24,11 +24,13 @@ public sealed record HazardStatus(
 public sealed record RiskStatus(
     HealthStatus Status,
     string Explanation,
-    IReadOnlyList<HazardStatus> Hazards)
+    IReadOnlyList<HazardStatus> Hazards,
+    IReadOnlyList<PersonalDeviation>? PersonalDeviations = null)
 {
     public HealthStatus GlobalStatus => Status;
     public HealthStatus OverallStatus => Status;
     public string Reason => Explanation;
     public string Message => Explanation;
     public IReadOnlyList<HazardStatus> HazardStatuses => Hazards;
+    public IReadOnlyList<PersonalDeviation> Deviations => PersonalDeviations ?? [];
 }
