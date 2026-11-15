@@ -811,6 +811,32 @@ PhantomSimulation Phantoms.Simulate(PhantomProfile phantom, decimal gravityG, in
 
 Reglas (todas heuristicas y simuladas): el efecto se escala por `(1 - g)`; hueso y musculo cambian linealmente por semana; fluidos e IOP se acercan a un maximo; el ejercicio reduce el efecto hasta un 60 % con 10 h/semana; las mujeres y los mayores de 50 pierden mas hueso.
 
+### Comparación de phantoms (HB-BE-08, issue #117)
+
+`GET /api/mc/v1/phantoms/compare?profiles=&environment=&weeks=&exerciseHours=` (cualquier usuario de Mission Control con sesión; datos de catálogo, sin datos personales) simula la misma estancia para varios phantoms y devuelve una serie por perfil:
+
+| Parámetro | Valor | Por defecto |
+|---|---|---|
+| `profiles` | ids, nombres o Guid separados por comas (`phantom-f35,Phantom C`) | todos los del catálogo |
+| `environment` | `station`, `spacecraft`, `lunarBase`, `marsBase`, o el id de un perfil de dominio (`mining`: 1 g, sin cambio) | `station` |
+| `weeks` | 1 a 104 (`phantomModel.maxWeeks`) | 26 |
+| `exerciseHours` | horas de ejercicio por semana, 0 a 40 | 7 |
+
+Cualquier valor no válido o desconocido es un 400 con el campo nombrado. La gravedad de cada entorno, los valores por defecto y los límites viven en `phantomModel.environments` y `phantomModel.compare` de `contracts/indicators.catalog.json` (`status: heuristic`); el modelo es el de `Phantoms.Simulate`. El cálculo es `PhantomComparison.Compare` en `Heartbeat.Shared`, así que el portal y el escritorio pueden repetirlo sin servidor con el mismo resultado. Todo es simulado (`simulated: true`) y no es un pronóstico ni un diagnóstico.
+
+```csharp
+public sealed record PhantomComparisonDto(
+    string Environment, string EnvironmentName, decimal GravityG, int Weeks, decimal ExerciseHoursPerWeek,
+    CatalogStatus Status, SourceLink Source, IReadOnlyList<PhantomSeries> Series, string Note, bool Simulated = true);
+public sealed record PhantomSeries(
+    PhantomProfile Phantom,                    // el perfil al empezar, sin cambios
+    IReadOnlyList<PhantomPoint> Points,        // una por semana, de 0 a weeks
+    PhantomPoint Final,                        // la última
+    IReadOnlyList<PhantomRegionChange> Regions);   // cambio por región de la figura al final
+public sealed record PhantomPoint(int Week, decimal BoneChangePercent, decimal MuscleChangePercent, decimal FluidChangePercent, decimal IopChangeMmHg);
+public sealed record PhantomEnvironment(string Key, string Name, decimal GravityG);
+```
+
 ### Perfiles de dominio comercial (HB-BE-11, issue #120)
 
 `contracts/indicators.catalog.json` trae `profiles`: `space` (referencia, sin cambios sobre el catálogo) y cuatro perfiles comerciales (`mining`, `antarctica`, `submarine`, `offshore`). Un perfil es un entorno típico (`environment`, mismo formato que `EnvironmentProfile`) más `overrides`: por indicador, las bandas que reemplazan a las del catálogo. Los **5 peligros, los indicadores y las unidades son los del catálogo**; solo cambian los umbrales. Todos los valores son `heuristic` y simulados, con la `source` del perfil (el catálogo valida que las bandas no se solapen ni dejen huecos, y que cada override apunte a un indicador existente).

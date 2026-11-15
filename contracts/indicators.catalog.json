@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.15-3",
+  "version": "2026.11.15-4",
   "disclaimer": "Catalog of simulated indicators for the improvements track. Values are demo/heuristic unless marked verified; not a medical device.",
   "sources": {
     "nasa-hrp": { "title": "NASA Human Research Program - Hazards of Human Spaceflight", "url": "https://www.nasa.gov/hrp/hazards/" },
@@ -103,6 +103,18 @@
     "femaleBoneFactor": 1.1,
     "ageBoneFactorOver50": 1.2,
     "maxWeeks": 104,
+    "compare": {
+      "defaultEnvironment": "station",
+      "defaultWeeks": 26,
+      "defaultExerciseHoursPerWeek": 7,
+      "maxExerciseHoursPerWeek": 40
+    },
+    "environments": {
+      "station": { "name": "Space station (low Earth orbit)", "gravityG": 0 },
+      "spacecraft": { "name": "Deep-space spacecraft", "gravityG": 0 },
+      "lunarBase": { "name": "Lunar base", "gravityG": 0.17 },
+      "marsBase": { "name": "Mars base", "gravityG": 0.38 }
+    },
     "regionFactors": {
       "height": { "from": "fluid", "factor": 0.4 },
       "neck": { "from": "fluid", "factor": 0.3 },
