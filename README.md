@@ -49,6 +49,10 @@ dotnet test Heartbeat.sln
 
 See [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md): secrets via environment variables, SQLite on IIS, seed switch and smoke test.
 
+## Data card
+
+Transparencia (qué es real, qué es simulado, semillas, fórmulas, fuentes): [docs/DATA-CARD.md](docs/DATA-CARD.md).
+
 ## Contracts
 
 Shared data model and API contracts live in [contracts/](contracts). The `reference-ranges.json` file is embedded into `Heartbeat.Shared`.
