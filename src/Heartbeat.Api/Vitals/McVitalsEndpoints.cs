@@ -235,7 +235,7 @@ public static class McVitalsEndpoints
         row.SupersedesId,
         readings.OrderBy(r => r.Indicator).Select(ToDto).ToList());
 
-    private static ReadingDto ToDto(Reading r) => new(r.Id, r.Indicator, r.Value, r.SecondaryValue, r.Status, SplitBandIds(r.BandIds));
+    private static ReadingDto ToDto(Reading r) => new(r.Id, r.Indicator, r.Value, r.SecondaryValue, r.Status, SplitBandIds(r.BandIds), r.Source, r.DeviceId);
 
     private static string[] SplitBandIds(string bandIds)
         => bandIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

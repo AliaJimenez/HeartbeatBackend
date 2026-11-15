@@ -48,6 +48,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             .HasForeignKey(c => c.AstronautId);
 
         builder.Entity<Reading>()
+            .Property(r => r.DeviceId)
+            .HasMaxLength(Reading.DeviceIdMaxLength);
+
+        builder.Entity<Reading>()
             .HasOne(r => r.CheckUp)
             .WithMany(c => c.Readings)
             .HasForeignKey(r => r.CheckUpId);

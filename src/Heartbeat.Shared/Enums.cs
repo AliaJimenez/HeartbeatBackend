@@ -32,6 +32,12 @@ public enum EscalationContact
     CrewMedicalOfficer
 }
 
+public enum ReadingSource
+{
+    Manual,
+    Wearable
+}
+
 public enum MessageDirection
 {
     ToMissionControl,
