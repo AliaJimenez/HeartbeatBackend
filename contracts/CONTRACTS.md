@@ -690,6 +690,32 @@ public sealed record RiskStatus(
     IsolationConfinementIndices? Indices = null);   // HB-BE-06
 ```
 
+### Motor de reglas y semáforo unificado (HB-BE-07, issue #103)
+
+`RiskEngine.Evaluate(RiskInputs)` en `Heartbeat.Shared` (puro, igual que `HealthEvaluator`: el escritorio calcula lo mismo sin conexión) devuelve un `RiskStatus` con **siempre los 5 peligros**, en el orden de `Hazard`, y un estado global que es el peor. `GET /api/mc/v1/crew/{id}/risk` (`vitals.view`, mismos `hoursWithoutContact` y `continuousStayHours` opcionales que `/mission`; 400 si son negativos, 404 si el astronauta no existe) lo calcula en el servidor con los datos guardados.
+
+```csharp
+public sealed record RiskInputs(
+    CheckUpEvaluation? Vitals = null,                       // última lectura de cada signo vital, evaluada con HealthEvaluator
+    RadiationSummaryDto? Radiation = null,
+    IReadOnlyList<EnvironmentReadingStatus>? Environment = null,   // última lectura de cada indicador de ambiente
+    EnvironmentProfile? Profile = null,
+    IsolationConfinementIndices? Isolation = null,
+    IReadOnlyList<PersonalDeviation>? Deviations = null);
+```
+
+Qué alimenta cada peligro (los umbrales viven en los catálogos, no en el motor):
+
+| Peligro | Entradas |
+|---|---|
+| `spaceRadiation` | dosis acumulada contra 600 mSv y mayor SPE contra 250 mSv (el peor de los dos); fuente CSA |
+| `hostileClosedEnvironment` | lecturas de ambiente (bandas de `indicators.catalog.json`) + glucosa y temperatura corporal |
+| `gravityFields` | presión arterial y frecuencia cardíaca + gravedad del perfil de la misión |
+| `isolationAndConfinement` | sueño y ánimo + índices de aislamiento y confinamiento |
+| `distanceFromEarth` | retardo de comunicación (`distanceKm / c`) contra la banda `commDelay` |
+
+El peligro de cada signo vital sale del campo `hazard` de `reference-ranges.json`. Cada peligro no verde trae `explanation` en lenguaje simple (qué indicador, en qué banda, el primer consejo y "simulated" donde aplica), y `value`, `limit` (el borde de la banda normal que se cruzó), `unit` y `source` del peor hallazgo. **Gravedad y distancia salen del perfil de la misión, que es la condición planificada, no una incidencia: pueden poner el peligro en `watch` pero nunca en `critical` por sí solas** (0 g es `critical` en el catálogo y pondría rojo a toda la estación). Los datos medidos no tienen tope. Todo es simulado y no es un diagnóstico.
+
 ### Aislamiento y confinamiento (HB-BE-06, issue #111)
 
 Los dos índices (0 a 1, más alto es peor) de `IsolationConfinement` en Shared llegan a las apps en `GET /api/crew/v1/mission` y `GET /api/mc/v1/mission` (`crew.view`), dentro de `MissionProfileDto.indices`, y en `RiskStatus.indices`. Cada índice se coloca en la banda de su entrada del catálogo (`isolation` y `confinement` en `contracts/indicators.catalog.json`), con su `catalogStatus` (`heuristic`) y su `source`. Todo es simulado (`simulated: true`) y no es un diagnóstico.

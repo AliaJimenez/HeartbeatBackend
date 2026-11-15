@@ -22,8 +22,25 @@ public static class McVitalsEndpoints
         group.MapGet("/series", GetSeriesAsync).RequirePermission(Permissions.VitalsHistory);
         group.MapGet("/radiation", GetRadiationAsync).RequirePermission(Permissions.VitalsView);
         group.MapGet("/environment", GetEnvironmentAsync).RequirePermission(Permissions.VitalsView);
+        group.MapGet("/risk", GetRiskAsync).RequirePermission(Permissions.VitalsView);
 
         return app;
+    }
+
+    private static async Task<IResult> GetRiskAsync(
+        Guid id, AppDbContext db, CancellationToken ct, decimal hoursWithoutContact = 0m, decimal continuousStayHours = 0m)
+    {
+        if (Crew.McMissionEndpoints.ValidateHours(hoursWithoutContact, continuousStayHours) is { } invalid)
+        {
+            return invalid;
+        }
+
+        if (!await db.Astronauts.AnyAsync(a => a.Id == id, ct))
+        {
+            return AstronautNotFound();
+        }
+
+        return Results.Ok(await Crew.RiskStatuses.LoadAsync(db, id, hoursWithoutContact, continuousStayHours, ct));
     }
 
     private static async Task<IResult> GetEnvironmentAsync(
