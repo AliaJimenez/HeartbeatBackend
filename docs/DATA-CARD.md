@@ -67,6 +67,8 @@ Se contrastaron indicadores del catálogo con estudios del [NASA Open Science Da
 | `radiationRate` (mSv/día) | OSD-714 (dosímetros Bio PADLES en la ISS) | Dosis equivalente de 0.48 y 0.79 mSv/día (0.31 y 0.36 mGy/día absorbida) | `partial`: el rango típico de la ISS cae en `normal`; no respalda los bordes de 1.5 y 3 |
 | `gravity` (g) | OSD-714 (centrífuga en la ISS, 1/6 g) | La gravedad lunar evitó la atrofia del sóleo pero no el cambio de tipo de fibra | `needsReview`: marcar `critical` por debajo de 0.3 g parece exagerado para la Luna; las bandas no se han cambiado |
 
+Como contraste independiente, el experimento canadiense **Radi-N2** midió en tripulación de la ISS una dosis de neutrones típica de 150 µSv/día (0.15 mSv/día), aproximadamente el 30 % de la radiación de la estación. Confirma que esa componente cae en la banda `normal`, pero no define los umbrales `watch` o `critical`. La CSA usa además un límite efectivo de carrera de 1,000 mSv; Heartbeat conserva el estándar NASA de 600 mSv y no mezcla ambos límites.
+
 Consecuencias:
 
 - **Ninguno se promovió a `verified`**, porque ningún estudio respalda los umbrales extremos. Un resultado `partial` deja el indicador en `heuristic`.
