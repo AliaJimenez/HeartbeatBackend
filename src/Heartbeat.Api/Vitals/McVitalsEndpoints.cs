@@ -243,6 +243,7 @@ public static class McVitalsEndpoints
         DateTimeOffset? from = null,
         DateTimeOffset? to = null,
         string? status = null,
+        string? source = null,
         int page = 1,
         int pageSize = DefaultPageSize)
     {
@@ -276,6 +277,8 @@ public static class McVitalsEndpoints
             }
         }
 
+        ReadingSource? sourceFilter = ParseSource(source, errors);
+
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
@@ -291,6 +294,16 @@ public static class McVitalsEndpoints
                         && (to is null || c.RecordedAt <= to)
                         && (statusFilter is null || c.OverallStatus == statusFilter))
             .ToList();
+        if (sourceFilter is not null)
+        {
+            var filteredIds = filtered.Select(c => c.Id).ToList();
+            var sourceCheckUpIds = (await db.Readings.AsNoTracking()
+                    .Where(r => filteredIds.Contains(r.CheckUpId) && r.Source == sourceFilter)
+                    .Select(r => r.CheckUpId)
+                    .ToListAsync(ct))
+                .ToHashSet();
+            filtered = filtered.Where(c => sourceCheckUpIds.Contains(c.Id)).ToList();
+        }
 
         var pageRows = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
         var pageIds = pageRows.Select(c => c.Id).ToList();
@@ -337,7 +350,8 @@ public static class McVitalsEndpoints
         CancellationToken ct,
         string? indicator = null,
         DateTimeOffset? from = null,
-        DateTimeOffset? to = null)
+        DateTimeOffset? to = null,
+        string? source = null)
     {
         var errors = new Dictionary<string, string[]>();
 
@@ -355,6 +369,8 @@ public static class McVitalsEndpoints
             errors["from"] = ["from must not be later than to."];
         }
 
+        ReadingSource? sourceFilter = ParseSource(source, errors);
+
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
@@ -371,12 +387,14 @@ public static class McVitalsEndpoints
         var activeIds = active.Keys.ToList();
 
         var readings = await db.Readings.AsNoTracking()
-            .Where(r => r.Indicator == parsedIndicator && activeIds.Contains(r.CheckUpId))
+            .Where(r => r.Indicator == parsedIndicator
+                        && activeIds.Contains(r.CheckUpId)
+                        && (sourceFilter == null || r.Source == sourceFilter))
             .ToListAsync(ct);
 
         var points = readings
             .OrderBy(r => active[r.CheckUpId])
-            .Select(r => new SeriesPointDto(active[r.CheckUpId], r.Value, r.SecondaryValue, r.Status))
+            .Select(r => new SeriesPointDto(active[r.CheckUpId], r.Value, r.SecondaryValue, r.Status, r.Source))
             .ToList();
 
         return Results.Ok(new SeriesDto(parsedIndicator, ranges.UnitFor(parsedIndicator), ranges.BandsFor(parsedIndicator), points));
@@ -396,6 +414,22 @@ public static class McVitalsEndpoints
 
     private static string[] SplitBandIds(string bandIds)
         => bandIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static ReadingSource? ParseSource(string? source, IDictionary<string, string[]> errors)
+    {
+        if (string.IsNullOrWhiteSpace(source) || source.Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (Enum.TryParse<ReadingSource>(source, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed))
+        {
+            return parsed;
+        }
+
+        errors["source"] = ["source must be all, manual or wearable."];
+        return null;
+    }
 
     private static IResult AstronautNotFound() => Results.Problem(title: "Astronaut not found", statusCode: StatusCodes.Status404NotFound);
 }

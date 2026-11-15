@@ -57,8 +57,8 @@ public class McSeriesEndpointsTests : IClassFixture<McSeriesEndpointsTests.Facto
             Id = id, AstronautId = _astronautId, RecordedAt = T0.AddDays(day), ReceivedAt = T0.AddDays(day).AddMinutes(5),
             OverallStatus = HealthStatus.Normal, RangesVersion = "2026.11.14-1", SupersedesId = supersedes,
         };
-        Reading R(Guid c, IndicatorType i, decimal v, decimal? v2, HealthStatus s) =>
-            new() { Id = Guid.NewGuid(), CheckUpId = c, Indicator = i, Value = v, SecondaryValue = v2, Status = s, BandIds = "x" };
+        Reading R(Guid c, IndicatorType i, decimal v, decimal? v2, HealthStatus s, ReadingSource source = ReadingSource.Manual) =>
+            new() { Id = Guid.NewGuid(), CheckUpId = c, Indicator = i, Value = v, SecondaryValue = v2, Status = s, BandIds = "x", Source = source };
 
         var day0 = Guid.NewGuid();
         var day2 = Guid.NewGuid();
@@ -69,7 +69,7 @@ public class McSeriesEndpointsTests : IClassFixture<McSeriesEndpointsTests.Facto
             R(day0, IndicatorType.HeartRate, 60, null, HealthStatus.Normal),
             R(wrong, IndicatorType.HeartRate, 200, null, HealthStatus.Critical),
             R(day2, IndicatorType.HeartRate, 70, null, HealthStatus.Normal),
-            R(day3, IndicatorType.HeartRate, 130, null, HealthStatus.Critical),
+            R(day3, IndicatorType.HeartRate, 130, null, HealthStatus.Critical, ReadingSource.Wearable),
             R(day5, IndicatorType.HeartRate, 75, null, HealthStatus.Normal),
             R(day3, IndicatorType.Sleep, 7, null, HealthStatus.Normal),
             R(day3, IndicatorType.BloodPressure, 185, 95, HealthStatus.Critical));
@@ -106,6 +106,18 @@ public class McSeriesEndpointsTests : IClassFixture<McSeriesEndpointsTests.Facto
         Assert.Equal([60m, 70m, 130m, 75m], series.Points.Select(p => p.Value)); // 200 belongs to the replaced check-up
         Assert.Equal([T0, T0.AddDays(2), T0.AddDays(3), T0.AddDays(5)], series.Points.Select(p => p.T));
         Assert.Equal(HealthStatus.Critical, series.Points[2].Status);
+        Assert.Equal(ReadingSource.Wearable, series.Points[2].Source);
+    }
+
+    [Theory]
+    [InlineData("manual", new[] { 60, 70, 75 })]
+    [InlineData("wearable", new[] { 130 })]
+    [InlineData("all", new[] { 60, 70, 130, 75 })]
+    public async Task Source_filters_points_and_all_keeps_both(string source, int[] expected)
+    {
+        var series = await Series($"?indicator=heartRate&source={source}");
+
+        Assert.Equal(expected.Select(value => (decimal)value), series.Points.Select(p => p.Value));
     }
 
     [Fact]
@@ -190,6 +202,15 @@ public class McSeriesEndpointsTests : IClassFixture<McSeriesEndpointsTests.Facto
 
         var res = await Client(Permissions.VitalsHistory)
             .GetAsync($"/api/mc/v1/crew/{_astronautId}/series?indicator=heartRate&from={from}&to={to}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Unknown_source_is_400()
+    {
+        var res = await Client(Permissions.VitalsHistory)
+            .GetAsync($"/api/mc/v1/crew/{_astronautId}/series?indicator=heartRate&source=implant");
 
         Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
     }

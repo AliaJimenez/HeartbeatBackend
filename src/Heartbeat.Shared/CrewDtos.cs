@@ -228,7 +228,12 @@ public sealed record AstronautStatusDto(
 public sealed record SeriesBandDto(HealthStatus Status, decimal? Min, decimal? Max);
 
 /// <summary>One chart point. T is the check-up's RecordedAt.</summary>
-public sealed record SeriesPointDto(DateTimeOffset T, decimal Value, decimal? SecondaryValue, HealthStatus Status);
+public sealed record SeriesPointDto(
+    DateTimeOffset T,
+    decimal Value,
+    decimal? SecondaryValue,
+    HealthStatus Status,
+    ReadingSource Source = ReadingSource.Manual);
 
 /// <summary>Trend of one indicator, oldest point first. Bands are those of the primary value
 /// (systolic for blood pressure); points of replaced check-ups are excluded.</summary>

@@ -410,9 +410,9 @@ Guard rails: an admin cannot remove `users.manage` or `roles.manage` from their 
 | PUT | `/crew/{id}` | `crew.manage` | `UpdateAstronautRequest` → `AstronautProfile` | |
 | POST | `/crew/{id}/reset-password` | `crew.manage` | `{ "newPassword": "…" }` → 204 | |
 | GET | `/crew/{id}/status` | `vitals.view` | → `AstronautStatusDto` | MR-14, MR-05 |
-| GET | `/crew/{id}/checkups?from=&to=&status=&page=` | `vitals.history` | → `Paged<CheckUpDto>` | MR-14 |
+| GET | `/crew/{id}/checkups?from=&to=&status=&source=all\|manual\|wearable&page=` | `vitals.history` | → `Paged<CheckUpDto>` | MR-14 |
 | GET | `/crew/{id}/checkups/{checkUpId}` | `vitals.view` | → `CheckUpDto` + evaluations | MR-14 |
-| GET | `/crew/{id}/series?indicator=&from=&to=` | `vitals.history` | → `SeriesDto` | NR-02 |
+| GET | `/crew/{id}/series?indicator=&from=&to=&source=all\|manual\|wearable` | `vitals.history` | → `SeriesDto`; every point includes its reading source | NR-02 |
 | GET | `/crew/{id}/radiation` | `vitals.view` | → `RadiationSummaryDto` | NR-07 |
 | GET | `/alerts?state=open\|acknowledged\|all&page=` | `alerts.view` | → `Paged<AlertDto>` | MR-06 |
 | POST | `/alerts/{id}/acknowledge` | `alerts.acknowledge` | `{ "note": "…" }` → `AlertDto` | MR-06 |
@@ -469,7 +469,8 @@ Guard rails: an admin cannot remove `users.manage` or `roles.manage` from their 
 // SeriesDto (charts)
 { "indicator": "heartRate", "unit": "bpm",
   "bands": [ { "status": "normal", "min": 50, "max": 101 } /* for shading */ ],
-  "points": [ { "t": "2026-11-12T09:00:00Z", "value": 64, "secondaryValue": null, "status": "normal" } ] }
+  "points": [ { "t": "2026-11-12T09:00:00Z", "value": 64, "secondaryValue": null,
+                "status": "normal", "source": "manual" } ] }
 
 // AlertDto
 { "id": "…", "astronautId": "…", "astronautName": "Ana Rivera", "checkUpId": "…",
