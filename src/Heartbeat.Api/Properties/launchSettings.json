@@ -17,7 +17,8 @@
       "applicationUrl": "https://localhost:7017;http://localhost:5027;http://0.0.0.0:5000",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "Seed__Enabled": "true"
+        "Seed__Enabled": "true",
+        "Seed__WeeksOfUse": "true"
       }
     },
     "https": {
