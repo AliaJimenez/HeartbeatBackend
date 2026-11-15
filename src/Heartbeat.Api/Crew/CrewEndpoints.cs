@@ -339,10 +339,14 @@ public static class CrewEndpoints
         var acknowledgedAlertsEntities = (await acknowledgedQuery.ToListAsync(cancellationToken))
             .Where(a => !lastPulled.HasValue || a.AcknowledgedAt > lastPulled.Value)
             .ToList();
+        var ackUserIds = acknowledgedAlertsEntities.Where(a => a.AcknowledgedByUserId != null).Select(a => a.AcknowledgedByUserId!.Value).Distinct().ToList();
+        var ackNames = ackUserIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.PortalUsers.AsNoTracking().Where(u => ackUserIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, cancellationToken);
         var acknowledgedAlerts = acknowledgedAlertsEntities.Select(a => new AcknowledgedAlert(
             a.CheckUpId,
             a.AcknowledgedAt!.Value,
-            "Mission Control",
+            a.AcknowledgedByUserId is { } by ? ackNames.GetValueOrDefault(by, "Mission Control") : "Mission Control",
             a.AcknowledgeNote)).ToList();
 
         await db.SaveChangesAsync(cancellationToken);
