@@ -232,6 +232,58 @@ public static class CrewEndpoints
             accepted.Add(checkUpDto.Id);
         }
 
+        // Messages and reports pushed by the astronaut (MR-11). Idempotent by id, like check-ups.
+        var checkUpIdsOfThisSync = accepted.ToHashSet();
+        var seenMessages = new HashSet<Guid>();
+        foreach (var dto in request.Messages ?? [])
+        {
+            if (!seenMessages.Add(dto.Id))
+            {
+                accepted.Add(dto.Id);
+                continue;
+            }
+
+            var stored = await db.Messages.AsNoTracking()
+                .Where(m => m.Id == dto.Id)
+                .Select(m => new { m.AstronautId })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (stored is not null)
+            {
+                // Already stored: a retry is accepted, but another astronaut's id is never reused.
+                if (stored.AstronautId == userId.Value)
+                {
+                    accepted.Add(dto.Id);
+                }
+                else
+                {
+                    rejected.Add(new SyncRejected(dto.Id, "Message id is already in use"));
+                }
+
+                continue;
+            }
+
+            var problem = await ValidateIncomingMessageAsync(dto, userId.Value, checkUpIdsOfThisSync, db, cancellationToken);
+            if (problem is not null)
+            {
+                rejected.Add(new SyncRejected(dto.Id, problem));
+                continue;
+            }
+
+            db.Messages.Add(new Message
+            {
+                Id = dto.Id,
+                AstronautId = userId.Value,            // always from the token, never from the body
+                Direction = MessageDirection.ToMissionControl,
+                Kind = dto.Kind,
+                CheckUpId = dto.CheckUpId,
+                Subject = dto.Subject.Trim(),
+                Body = dto.Body.Trim(),
+                CreatedAt = dto.CreatedAt,             // sender's clock
+                ReceivedAt = serverNow,
+            });
+            accepted.Add(dto.Id);
+        }
+
         AstronautProfile? responseProfile = null;
         if (request.Profile is not null && request.Profile.UpdatedAt > astronaut.UpdatedAt)
         {
@@ -260,6 +312,11 @@ public static class CrewEndpoints
             }
         }
 
+        var senderIds = inboundMessagesEntities.Where(m => m.SenderUserId != null).Select(m => m.SenderUserId!.Value).Distinct().ToList();
+        var senderNames = senderIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.PortalUsers.AsNoTracking().Where(u => senderIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, cancellationToken);
+
         var inboundMessages = inboundMessagesEntities.Select(m => new MessageDto(
             m.Id,
             m.Direction,
@@ -270,7 +327,7 @@ public static class CrewEndpoints
             m.CreatedAt,
             m.ReceivedAt,
             m.ReadAt,
-            null)).ToList();
+            m.SenderUserId is { } by ? senderNames.GetValueOrDefault(by, "Mission Control") : "Mission Control")).ToList();
 
         var acknowledgedQuery = db.Alerts
             .Where(a => a.AstronautId == userId.Value && a.AcknowledgedAt != null);
@@ -295,6 +352,40 @@ public static class CrewEndpoints
             responseProfile,
             new SyncInbound(inboundMessages, acknowledgedAlerts),
             rangesUpdateAvailable));
+    }
+
+    // Returns why a pushed message must be rejected, or null when it can be stored.
+    private static async Task<string?> ValidateIncomingMessageAsync(
+        MessageDto dto, Guid astronautId, HashSet<Guid> checkUpIdsOfThisSync, AppDbContext db, CancellationToken ct)
+    {
+        if (dto.Direction != MessageDirection.ToMissionControl)
+        {
+            return "Only toMissionControl messages can be pushed";
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Subject) || dto.Subject.Trim().Length > Heartbeat.Api.Messages.McMessagesEndpoints.MaxSubjectLength)
+        {
+            return $"Subject is required and must be at most {Heartbeat.Api.Messages.McMessagesEndpoints.MaxSubjectLength} characters";
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Body) || dto.Body.Trim().Length > Heartbeat.Api.Messages.McMessagesEndpoints.MaxBodyLength)
+        {
+            return $"Body is required and must be at most {Heartbeat.Api.Messages.McMessagesEndpoints.MaxBodyLength} characters";
+        }
+
+        if (dto.Kind == MessageKind.Report && dto.CheckUpId is null)
+        {
+            return "A report must reference its check-up";
+        }
+
+        if (dto.CheckUpId is { } checkUpId
+            && !checkUpIdsOfThisSync.Contains(checkUpId)
+            && !await db.CheckUps.AnyAsync(c => c.Id == checkUpId && c.AstronautId == astronautId, ct))
+        {
+            return "The referenced check-up does not exist or is not yours";
+        }
+
+        return null;
     }
 
     private static async Task<IResult> GetCheckUpsAsync(

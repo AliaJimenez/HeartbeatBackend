@@ -249,3 +249,7 @@ public sealed record AlertDto(
 
 /// <summary>Body of POST /alerts/{id}/acknowledge.</summary>
 public sealed record AcknowledgeAlertRequest(string Note);
+
+
+/// <summary>Body of POST /crew/{id}/messages (Mission Control reply).</summary>
+public sealed record SendMessageRequest(string Subject, string Body);
