@@ -53,7 +53,8 @@ public enum MessageKind
 public enum AlertKind
 {
     CheckUp,
-    Radiation
+    Radiation,
+    Environment
 }
 
 public enum RadiationType

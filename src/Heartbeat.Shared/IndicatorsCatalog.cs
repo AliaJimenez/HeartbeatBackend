@@ -114,4 +114,27 @@ public static class IndicatorsCatalog
 
         return entries;
     }
+
+    private static readonly Lazy<IReadOnlyList<IndicatorCatalogEntry>> _all = new(All);
+
+    /// <summary>The catalog entries, parsed and validated once.</summary>
+    public static IReadOnlyList<IndicatorCatalogEntry> Cached => _all.Value;
+
+    public static IndicatorCatalogEntry? Find(string? id)
+        => id is null ? null : Cached.FirstOrDefault(e => string.Equals(e.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The band a value falls in: <c>Min &lt;= value &lt; Max</c> (an open end is unbounded).</summary>
+    public static IndicatorBand Evaluate(IndicatorCatalogEntry entry, decimal value)
+        => entry.Bands.FirstOrDefault(b => (b.Min is null || value >= b.Min) && (b.Max is null || value < b.Max))
+           ?? throw new InvalidOperationException($"Indicator '{entry.Id}' has no band for {value}.");
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SourceLink> _sources = new();
+
+    public static SourceLink SourceFor(IndicatorCatalogEntry entry)
+        => _sources.GetOrAdd(entry.Source, id =>
+        {
+            using var doc = Parse();
+            var source = doc.RootElement.GetProperty("sources").GetProperty(id);
+            return new SourceLink(source.GetProperty("title").GetString()!, new Uri(source.GetProperty("url").GetString()!));
+        });
 }
