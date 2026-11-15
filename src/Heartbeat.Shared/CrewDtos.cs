@@ -96,7 +96,8 @@ public sealed record SyncRequest(
     string RangesVersion,
     UpdateProfileRequest? Profile,
     IReadOnlyList<CheckUpDto> CheckUps,
-    IReadOnlyList<MessageDto> Messages);
+    IReadOnlyList<MessageDto> Messages,
+    IReadOnlyList<RadiationDoseDto>? RadiationDoses = null);
 
 public sealed record SyncResponse(
     DateTimeOffset ServerTime,
@@ -104,7 +105,21 @@ public sealed record SyncResponse(
     IReadOnlyList<SyncRejected> Rejected,
     AstronautProfile? Profile,
     SyncInbound Inbound,
-    bool RangesUpdateAvailable);
+    bool RangesUpdateAvailable,
+    decimal? RadiationTotalMsv = null);
+
+public sealed record RadiationDoseDto(
+    Guid Id,
+    DateTimeOffset RecordedAt,
+    DateTimeOffset? ReceivedAt,
+    decimal DoseMsv,
+    string? Note);
+
+public sealed record RadiationSummaryDto(
+    decimal TotalMsv,
+    int Entries,
+    IReadOnlyList<RadiationDoseDto> Doses,
+    SourceLink Source);
 
 public sealed record Paged<T>(
     IReadOnlyList<T> Items,

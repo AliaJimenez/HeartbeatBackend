@@ -19,6 +19,7 @@ public static class CrewEndpoints
         group.MapGet("/reference-ranges", GetReferenceRanges);
         group.MapPost("/sync", SyncAsync);
         group.MapGet("/checkups", GetCheckUpsAsync);
+        group.MapGet("/radiation", GetRadiationAsync);
 
         return app;
     }
@@ -284,6 +285,9 @@ public static class CrewEndpoints
             accepted.Add(dto.Id);
         }
 
+        var radiationTotal = await SyncRadiationDosesAsync(
+            db, userId.Value, request.RadiationDoses ?? [], serverNow, accepted, rejected, cancellationToken);
+
         AstronautProfile? responseProfile = null;
         if (request.Profile is not null && request.Profile.UpdatedAt > astronaut.UpdatedAt)
         {
@@ -351,7 +355,91 @@ public static class CrewEndpoints
             rejected,
             responseProfile,
             new SyncInbound(inboundMessages, acknowledgedAlerts),
-            rangesUpdateAvailable));
+            rangesUpdateAvailable,
+            radiationTotal));
+    }
+
+    // Radiation doses sync like check-ups: created on the desktop with their own id, so a retried sync is harmless.
+    // Returns the astronaut's cumulative dose after this batch (summed in memory: SQLite cannot SUM a decimal).
+    private static async Task<decimal> SyncRadiationDosesAsync(
+        AppDbContext db,
+        Guid astronautId,
+        IReadOnlyList<RadiationDoseDto> doses,
+        DateTimeOffset serverNow,
+        List<Guid> accepted,
+        List<SyncRejected> rejected,
+        CancellationToken cancellationToken)
+    {
+        var stored = await db.RadiationDoses
+            .AsNoTracking()
+            .Where(d => d.AstronautId == astronautId)
+            .Select(d => new { d.Id, d.DoseMsv })
+            .ToListAsync(cancellationToken);
+        var total = RadiationDoses.Total(stored.Select(d => d.DoseMsv));
+
+        if (doses.Count == 0)
+        {
+            return total;
+        }
+
+        var mine = stored.Select(d => d.Id).ToHashSet();
+        var incomingIds = doses.Select(d => d.Id).ToList();
+        var ownedByOthers = (await db.RadiationDoses
+                .AsNoTracking()
+                .Where(d => incomingIds.Contains(d.Id) && d.AstronautId != astronautId)
+                .Select(d => d.Id)
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
+
+        foreach (var dose in doses)
+        {
+            if (ownedByOthers.Contains(dose.Id))
+            {
+                rejected.Add(new SyncRejected(dose.Id, "Radiation dose id is already in use"));
+                continue;
+            }
+
+            if (mine.Contains(dose.Id))
+            {
+                accepted.Add(dose.Id);
+                continue;
+            }
+
+            var note = string.IsNullOrWhiteSpace(dose.Note) ? null : dose.Note.Trim();
+            var errors = RadiationDoses.Validate(dose.DoseMsv, note);
+            if (errors.Count > 0)
+            {
+                rejected.Add(new SyncRejected(dose.Id, errors[0]));
+                continue;
+            }
+
+            db.RadiationDoses.Add(new RadiationDose
+            {
+                Id = dose.Id,
+                AstronautId = astronautId,
+                RecordedAt = dose.RecordedAt,
+                ReceivedAt = serverNow,
+                DoseMsv = dose.DoseMsv,
+                Note = note,
+            });
+            mine.Add(dose.Id);
+            total += dose.DoseMsv;
+            accepted.Add(dose.Id);
+        }
+
+        return total;
+    }
+
+    private static async Task<IResult> GetRadiationAsync(
+        ClaimsPrincipal principal, AppDbContext db, CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Problem(title: "Invalid token", statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        return Results.Ok(await RadiationSummaries.LoadAsync(db, userId.Value, cancellationToken));
     }
 
     // Returns why a pushed message must be rejected, or null when it can be stored.

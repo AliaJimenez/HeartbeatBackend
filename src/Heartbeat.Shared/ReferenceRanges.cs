@@ -36,4 +36,15 @@ public static class ReferenceRanges
     }
 
     public static JsonDocument Parse() => JsonDocument.Parse(Json);
+
+    public static SourceLink GetSource(string sourceId)
+    {
+        using var doc = Parse();
+        if (!doc.RootElement.GetProperty("sources").TryGetProperty(sourceId, out var source))
+        {
+            throw new KeyNotFoundException($"Source '{sourceId}' is not defined in the reference ranges.");
+        }
+
+        return new SourceLink(source.GetProperty("title").GetString()!, new Uri(source.GetProperty("url").GetString()!));
+    }
 }

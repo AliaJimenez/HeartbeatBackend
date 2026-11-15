@@ -15,6 +15,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Reading> Readings => Set<Reading>();
     public DbSet<Alert> Alerts => Set<Alert>();
     public DbSet<Message> Messages => Set<Message>();
+    public DbSet<RadiationDose> RadiationDoses => Set<RadiationDose>();
     public DbSet<PortalUser> PortalUsers => Set<PortalUser>();
     public new DbSet<Role> Roles => Set<Role>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
@@ -65,6 +66,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             .HasOne(a => a.CheckUp)
             .WithOne(c => c.Alert)
             .HasForeignKey<Alert>(a => a.CheckUpId);
+
+        builder.Entity<RadiationDose>(e =>
+        {
+            e.Property(d => d.Note).HasMaxLength(Heartbeat.Shared.RadiationDoses.NoteMaxLength);
+            e.HasIndex(d => d.AstronautId);
+            e.HasOne(d => d.Astronaut).WithMany().HasForeignKey(d => d.AstronautId);
+        });
 
         builder.Entity<Message>()
             .HasOne(m => m.Astronaut)

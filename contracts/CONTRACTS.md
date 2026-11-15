@@ -1,6 +1,6 @@
 # Heartbeat — Data Model & API Contracts
 
-Version 0.2 · Nov 14, 2026 · Hours 0–4 deliverable. 0.2 adds `Reading.Source` and `Reading.DeviceId` (smartwatch readiness, issue #9).
+Version 0.2 · Nov 14, 2026 · Hours 0–4 deliverable. 0.2 adds `Reading.Source` and `Reading.DeviceId` (smartwatch readiness, issue #9). 0.3 adds radiation dose logging (issue #51).
 
 This file is the agreement every workstream builds against. Change it only by team agreement, and bump the version when you do.
 
@@ -89,6 +89,7 @@ erDiagram
     Astronaut ||--o{ CheckUp : records
     CheckUp ||--|{ Reading : contains
     Astronaut ||--o{ Message : "sends / receives"
+    Astronaut ||--o{ RadiationDose : logs
     CheckUp ||--o| Alert : raises
     PortalUser }o--|| Role : has
     Role ||--o{ RolePermission : grants
@@ -155,6 +156,18 @@ A check-up may contain 1–6 readings, one per indicator. Readings are never upd
 | AcknowledgedAt | DateTimeOffset? | |
 | AcknowledgedByUserId | Guid? | |
 | AcknowledgeNote | string(500)? | |
+
+**RadiationDose** (NR-07 — append-only, created on the desktop and synced like a check-up)
+| Field | Type | Notes |
+| --- | --- | --- |
+| Id | Guid | created on the desktop, so a retried sync is safe |
+| AstronautId | Guid | taken from the token on the server, never from the body |
+| RecordedAt | DateTimeOffset | when the astronaut logged it (desktop clock) |
+| ReceivedAt | DateTimeOffset? | set by the server on sync |
+| DoseMsv | decimal | millisieverts, greater than 0 and at most 500 per entry |
+| Note | string(200)? | free text ("solar particle event") |
+
+The cumulative mission total is the sum of an astronaut's doses (`RadiationDoses.Total` in `Heartbeat.Shared`). The source shown next to it is `csa-radiation` in `reference-ranges.json` (`ReferenceRanges.GetSource`).
 
 **Message** (MR-11)
 | Field | Type | Notes |
@@ -239,6 +252,7 @@ Every endpoint except `auth/*` requires a crew token. The astronaut ID always co
 | GET | `/reference-ranges` | → raw `reference-ranges.json` (`ETag` = version) | MR-03 |
 | POST | `/sync` | `SyncRequest` → `SyncResponse` | MR-10, MR-11 |
 | GET | `/checkups?from=&to=&page=` | → `Paged<CheckUpDto>` (restore history on a new device) | MR-14 |
+| GET | `/radiation` | → `RadiationSummaryDto` (doses newest first, `totalMsv`, CSA `source`) | NR-07 |
 
 ### Payloads
 
@@ -307,7 +321,8 @@ One call pushes everything pending and pulls everything new. It is idempotent: s
   "rangesVersion": "2026.11.14-1",
   "profile": null,                              // or an UpdateProfileRequest edited offline
   "checkUps": [ /* CheckUpDto[], with receivedAt null */ ],
-  "messages": [ /* MessageDto[], direction "toMissionControl" only */ ]
+  "messages": [ /* MessageDto[], direction "toMissionControl" only */ ],
+  "radiationDoses": [ /* RadiationDoseDto[]: { "id", "recordedAt", "receivedAt": null, "doseMsv": 0.42, "note": null }; optional */ ]
 }
 
 // 200 SyncResponse
@@ -320,7 +335,8 @@ One call pushes everything pending and pulls everything new. It is idempotent: s
     "messages": [ /* MessageDto[], direction "toAstronaut", created since lastPulledAt */ ],
     "acknowledgedAlerts": [ { "checkUpId": "0193a…", "acknowledgedAt": "…", "by": "Dr. Okafor", "note": "Rest 24h, recheck" } ]
   },
-  "rangesUpdateAvailable": false               // true → GET /reference-ranges
+  "rangesUpdateAvailable": false,              // true → GET /reference-ranges
+  "radiationTotalMsv": 12.84                   // the astronaut's cumulative dose after this sync
 }
 ```
 
@@ -330,6 +346,7 @@ Server rules:
 - Create an `Alert` for every accepted check-up whose overall status is `critical`.
 - Profile edits: the newer `updatedAt` wins.
 - Accept at most 500 check-ups per call; the desktop sends them in batches, oldest first.
+- Radiation doses are idempotent by `id` (a repeated id is accepted and counted once). A dose that is 0 or less, above 500 mSv, has a note over 200 characters, or reuses an id that belongs to another astronaut goes to `rejected` with the reason; the rest of the batch is still stored.
 - Readings are append-only, so nothing can conflict apart from the profile.
 
 Desktop rules:
@@ -394,6 +411,7 @@ Guard rails: an admin cannot remove `users.manage` or `roles.manage` from their 
 | GET | `/crew/{id}/checkups?from=&to=&status=&page=` | `vitals.history` | → `Paged<CheckUpDto>` | MR-14 |
 | GET | `/crew/{id}/checkups/{checkUpId}` | `vitals.view` | → `CheckUpDto` + evaluations | MR-14 |
 | GET | `/crew/{id}/series?indicator=&from=&to=` | `vitals.history` | → `SeriesDto` | NR-02 |
+| GET | `/crew/{id}/radiation` | `vitals.view` | → `RadiationSummaryDto` | NR-07 |
 | GET | `/alerts?state=open\|acknowledged\|all&page=` | `alerts.view` | → `Paged<AlertDto>` | MR-06 |
 | POST | `/alerts/{id}/acknowledge` | `alerts.acknowledge` | `{ "note": "…" }` → `AlertDto` | MR-06 |
 | GET | `/crew/{id}/messages?page=` | `messages.view` | → `Paged<MessageDto>` | MR-11 |
@@ -492,6 +510,7 @@ Portal users: `admin` (Administrator), `j.okafor` (Flight Surgeon), `m.chen` (Mi
 | NR-02 | `/series` + band shading |
 | NR-03 | `whyItMatters`, `howToMeasure`, `risks` in the ranges file |
 | NR-04 | `bodyRegion` per indicator (ready for the body figure) |
+| NR-07 | `RadiationDose`, `/radiation` (crew and MC), `radiationDoses` in `/sync`, `csa-radiation` source |
 | NR-08 | `/crew` → `CrewSummaryDto` |
 
 ## 9. Still open
