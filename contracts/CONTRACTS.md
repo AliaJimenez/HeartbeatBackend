@@ -685,7 +685,40 @@ Estado global del astronauta (peor de los peligros) más la lista por peligro y 
 public sealed record RiskStatus(
     HealthStatus Status,
     string Explanation,
-    IReadOnlyList<HazardStatus> Hazards);
+    IReadOnlyList<HazardStatus> Hazards,
+    IReadOnlyList<PersonalDeviation>? PersonalDeviations = null,
+    IsolationConfinementIndices? Indices = null);   // HB-BE-06
+```
+
+### Aislamiento y confinamiento (HB-BE-06, issue #111)
+
+Los dos índices (0 a 1, más alto es peor) de `IsolationConfinement` en Shared llegan a las apps en `GET /api/crew/v1/mission` y `GET /api/mc/v1/mission` (`crew.view`), dentro de `MissionProfileDto.indices`, y en `RiskStatus.indices`. Cada índice se coloca en la banda de su entrada del catálogo (`isolation` y `confinement` en `contracts/indicators.catalog.json`), con su `catalogStatus` (`heuristic`) y su `source`. Todo es simulado (`simulated: true`) y no es un diagnóstico.
+
+Dos entradas de las fórmulas no están en el perfil de la misión: `hoursWithoutContact` y `continuousStayHours`. Las apps las pasan por query string en los dos `GET /mission` (decimales, por defecto 0, no negativos; si no, 400) y el servidor las devuelve en la respuesta. Con 0 el índice refleja solo el perfil. Una misión sin tripulación (`crewSize` 0) no tiene índices (`indices: null`).
+
+```jsonc
+// MissionProfileDto.indices
+{ "isolation":   { "indicatorId": "isolation", "name": "Aislamiento", "value": 0.4751, "status": "watch",
+                   "label": "Moderate", "catalogStatus": "heuristic", "source": { "title": "…", "url": "…" } },
+  "confinement": { "indicatorId": "confinement", "name": "Confinamiento", "value": 0.1, "status": "normal",
+                   "label": "Low", "catalogStatus": "heuristic", "source": { "title": "…", "url": "…" } },
+  "status": "watch", "hoursWithoutContact": 0, "continuousStayHours": 0, "simulated": true }
+```
+
+```csharp
+public sealed record IsolationConfinementIndexDto(
+    string IndicatorId, string Name, decimal Value, HealthStatus Status, string Label,
+    CatalogStatus CatalogStatus, SourceLink Source);
+
+public sealed record IsolationConfinementIndices(
+    IsolationConfinementIndexDto Isolation, IsolationConfinementIndexDto Confinement, HealthStatus Status,
+    decimal HoursWithoutContact, decimal ContinuousStayHours, bool Simulated = true);
+
+// MissionProfileDto gains: IsolationConfinementIndices? Indices = null
+
+IsolationConfinementIndices IsolationConfinement.Evaluate(EnvironmentProfile profile, decimal hoursWithoutContact = 0, decimal continuousStayHours = 0);
+HazardStatus IsolationConfinement.ToHazardStatus(IsolationConfinementIndices indices);   // hazard isolationAndConfinement: worse index as value, start of its critical band as limit
+RiskStatus   RiskStatus.WithIsolationConfinement(IsolationConfinementIndices indices);   // for the rules engine (HB-BE-07): replaces or adds that hazard, global status = worst hazard
 ```
 
 ### PhantomProfile
