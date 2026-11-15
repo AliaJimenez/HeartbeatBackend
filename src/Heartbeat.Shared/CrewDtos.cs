@@ -119,7 +119,10 @@ public sealed record RadiationSummaryDto(
     decimal TotalMsv,
     int Entries,
     IReadOnlyList<RadiationDoseDto> Doses,
-    SourceLink Source);
+    SourceLink Source,
+    RadiationType Type = RadiationType.Gcr,
+    decimal Rate = 0m,
+    decimal PercentOfLimit = 0m);
 
 public sealed record Paged<T>(
     IReadOnlyList<T> Items,
