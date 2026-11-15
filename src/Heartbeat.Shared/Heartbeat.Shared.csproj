@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\contracts\reference-ranges.json" LogicalName="Heartbeat.Shared.reference-ranges.json" />
+    <EmbeddedResource Include="..\..\contracts\indicators.catalog.json" LogicalName="Heartbeat.Shared.indicators.catalog.json" />
   </ItemGroup>
 
 </Project>

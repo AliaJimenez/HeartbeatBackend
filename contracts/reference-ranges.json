@@ -3,6 +3,7 @@
   "disclaimer": "Heartbeat supports self-assessment only. It is not a medical device and does not diagnose. Ranges are demo values for a healthy adult at rest, drawn from public clinical references; they are not flight-surgeon approved.",
   "intervalRule": "Each band covers min <= value < max. A missing min means no lower limit; a missing max means no upper limit. Bands of one indicator never overlap and leave no gaps.",
   "statusOrder": ["normal", "watch", "critical"],
+  "status": "verified",
   "escalation": {
     "watch": {
       "contact": "self",
