@@ -13,7 +13,8 @@ public sealed record RiskInputs(
     IReadOnlyList<EnvironmentReadingStatus>? Environment = null,
     EnvironmentProfile? Profile = null,
     IsolationConfinementIndices? Isolation = null,
-    IReadOnlyList<PersonalDeviation>? Deviations = null);
+    IReadOnlyList<PersonalDeviation>? Deviations = null,
+    IReadOnlyList<EnvironmentReadingStatus>? Vision = null);   // latest IOP and visual acuity (HB-BE-05)
 
 /// <summary>
 /// HB-BE-07: one green / yellow / red per NASA hazard and one global (the worst), each with a plain-language reason
@@ -40,7 +41,7 @@ public static class RiskEngine
             Radiation(inputs.Radiation, vitals),
             IsolationAndConfinement(inputs.Isolation, vitals),
             DistanceFromEarth(inputs.Profile, vitals),
-            GravityFields(inputs.Profile, vitals),
+            GravityFields(inputs.Profile, inputs.Vision, vitals),
             HostileClosedEnvironment(inputs.Environment, vitals),
         };
         hazards.Sort((a, b) => a.Hazard.CompareTo(b.Hazard));
@@ -197,7 +198,8 @@ public static class RiskEngine
         return Build(Hazard.DistanceFromEarth, findings, "The delay to Earth is short (simulated data).");
     }
 
-    private static HazardStatus GravityFields(EnvironmentProfile? profile, Dictionary<Hazard, List<Finding>> vitals)
+    private static HazardStatus GravityFields(
+        EnvironmentProfile? profile, IReadOnlyList<EnvironmentReadingStatus>? vision, Dictionary<Hazard, List<Finding>> vitals)
     {
         var findings = VitalsOf(vitals, Hazard.GravityFields).ToList();
         if (profile is not null && IndicatorsCatalog.Find("gravity") is { } entry)
@@ -210,7 +212,16 @@ public static class RiskEngine
             findings.Add(new Finding("Gravity", status, text, profile.GravityG, NormalEdge(entry, profile.GravityG), entry.Unit, IndicatorsCatalog.SourceFor(entry)));
         }
 
-        return Build(Hazard.GravityFields, findings, "Blood pressure, heart rate and gravity are within their usual ranges.");
+        foreach (var r in vision ?? [])
+        {
+            var limit = IndicatorsCatalog.Find(r.IndicatorId) is { } e ? NormalEdge(e, r.Value) : null;
+            var text = r.Status == HealthStatus.Normal
+                ? $"{r.Name} is {r.Value:0.##} {r.Unit}."
+                : $"{r.Name} is {r.Label.ToLowerInvariant()}: {r.Value:0.##} {r.Unit} (simulated reading).";
+            findings.Add(new Finding(r.Name, r.Status, text, r.Value, limit, r.Unit, r.Source));
+        }
+
+        return Build(Hazard.GravityFields, findings, "Blood pressure, heart rate, eye readings and gravity are within their usual ranges.");
     }
 
     private static HazardStatus HostileClosedEnvironment(

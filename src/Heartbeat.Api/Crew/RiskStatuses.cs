@@ -21,6 +21,8 @@ public static class RiskStatuses
         var radiation = await RadiationSummaries.LoadAsync(db, astronautId, cancellationToken);
         var environment = (await EnvironmentReadings.LoadAsync(db, astronautId, null, null, null, 1, 1, cancellationToken)).Latest;
 
+        var vision = VisionSummaries.Latest(await VisionSummaries.LoadAsync(db, astronautId, null, null, cancellationToken));
+
         var mission = await db.Astronauts.AsNoTracking()
             .Where(a => a.Id == astronautId)
             .Select(a => a.Mission)
@@ -32,7 +34,8 @@ public static class RiskStatuses
             radiation,
             environment,
             missionDto?.EnvironmentProfile,
-            missionDto?.Indices));
+            missionDto?.Indices,
+            Vision: vision));
     }
 
     // The newest value of each vital sign across the astronaut's check-ups (corrected check-ups are replaced by

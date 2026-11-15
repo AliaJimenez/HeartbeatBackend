@@ -129,10 +129,16 @@ public static class IndicatorsCatalog
     public static IndicatorCatalogEntry? Find(string? id)
         => id is null ? null : Cached.FirstOrDefault(e => string.Equals(e.Id, id, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The band a value falls in: <c>Min &lt;= value &lt; Max</c> (an open end is unbounded).</summary>
+    /// <summary>
+    /// The band a value falls in: <c>Min &lt;= value &lt; Max</c> (an open end is unbounded). Some entries do not cover the whole
+    /// line (IOP below 10 mmHg, gravity above 1.1 g, a negative CO2): a value outside every band is not normal, so it
+    /// comes back as <see cref="OutsideBand"/> (watch) instead of failing.
+    /// </summary>
     public static IndicatorBand Evaluate(IndicatorCatalogEntry entry, decimal value)
-        => entry.Bands.FirstOrDefault(b => (b.Min is null || value >= b.Min) && (b.Max is null || value < b.Max))
-           ?? throw new InvalidOperationException($"Indicator '{entry.Id}' has no band for {value}.");
+        => entry.Bands.FirstOrDefault(b => (b.Min is null || value >= b.Min) && (b.Max is null || value < b.Max)) ?? OutsideBand;
+
+    public static readonly IndicatorBand OutsideBand =
+        new("outside-range", HealthStatus.Watch, null, null, "Outside the usual range");
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SourceLink> _sources = new();
 
