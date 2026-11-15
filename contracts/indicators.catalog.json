@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.15-1",
+  "version": "2026.11.15-2",
   "disclaimer": "Catalog of simulated indicators for the improvements track. Values are demo/heuristic unless marked verified; not a medical device.",
   "sources": {
     "nasa-hrp": { "title": "NASA Human Research Program - Hazards of Human Spaceflight", "url": "https://www.nasa.gov/hrp/hazards/" },
@@ -11,8 +11,84 @@
     "nasa-team": { "title": "Team / Behavioral Health (NASA HRP)", "url": "https://humanresearchroadmap.nasa.gov/risks/risk.cfm?i=52" },
     "nasa-delay": { "title": "Communication Delay (NASA HRP)", "url": "https://humanresearchroadmap.nasa.gov/risks/risk.cfm?i=99" },
     "medline-iop": { "title": "Intraocular pressure (MedlinePlus)", "url": "https://medlineplus.gov/ency/article/003403.htm" },
-    "medline-cognition": { "title": "Cognitive testing (MedlinePlus)", "url": "https://medlineplus.gov/cognitivetesting.html" }
+    "medline-cognition": { "title": "Cognitive testing (MedlinePlus)", "url": "https://medlineplus.gov/cognitivetesting.html" },
+    "niosh-mining": { "title": "Mining (NIOSH, CDC)", "url": "https://www.cdc.gov/niosh/mining/" },
+    "nasa-antarctic": { "title": "Antarctic Stations (NASA analog missions)", "url": "https://www.nasa.gov/antarctic-stations-nsf/" },
+    "nasa-neemo": { "title": "NEEMO, undersea analog (NASA)", "url": "https://www.nasa.gov/missions/analog-field-testing/neemo/about-neemo-nasa-extreme-environment-mission-operations" },
+    "hse-offshore": { "title": "Offshore (Health and Safety Executive, UK)", "url": "https://www.hse.gov.uk/offshore/" }
   },
+  "profiles": [
+    {
+      "id": "space",
+      "name": "Espacio (referencia)",
+      "description": "Perfil base de Heartbeat: estación en órbita baja. Usa los umbrales del catálogo sin cambios.",
+      "environment": { "type": "station", "gravityG": 0, "distanceKm": 408, "crewSize": 4, "habitableVolumeM3": 388 },
+      "source": "nasa-hrp",
+      "status": "heuristic",
+      "overrides": {}
+    },
+    {
+      "id": "mining",
+      "name": "Minería subterránea",
+      "description": "Equipo pequeño bajo tierra: ruido, calor y humedad altos, aire más cargado de CO₂ y dosis ocupacional por radón. Umbrales de demostración.",
+      "environment": { "type": "mine", "gravityG": 1, "distanceKm": 150, "crewSize": 8, "habitableVolumeM3": 60 },
+      "source": "niosh-mining",
+      "status": "heuristic",
+      "overrides": {
+        "radiation": [ { "status": "normal", "min": 0, "max": 10 }, { "status": "watch", "min": 10, "max": 20 }, { "status": "critical", "min": 20 } ],
+        "radiationRate": [ { "status": "normal", "min": 0, "max": 0.05 }, { "status": "watch", "min": 0.05, "max": 0.1 }, { "status": "critical", "min": 0.1 } ],
+        "co2": [ { "status": "normal", "min": 0, "max": 2 }, { "status": "watch", "min": 2, "max": 3.8 }, { "status": "critical", "min": 3.8 } ],
+        "noise": [ { "status": "normal", "max": 85 }, { "status": "watch", "min": 85, "max": 100 }, { "status": "critical", "min": 100 } ],
+        "temperature": [ { "status": "critical", "max": 14 }, { "status": "watch", "min": 14, "max": 18 }, { "status": "normal", "min": 18, "max": 28 }, { "status": "watch", "min": 28, "max": 32 }, { "status": "critical", "min": 32 } ],
+        "humidity": [ { "status": "critical", "max": 30 }, { "status": "watch", "min": 30, "max": 40 }, { "status": "normal", "min": 40, "max": 80 }, { "status": "watch", "min": 80, "max": 90 }, { "status": "critical", "min": 90 } ],
+        "confinement": [ { "status": "normal", "max": 0.5 }, { "status": "watch", "min": 0.5, "max": 0.8 }, { "status": "critical", "min": 0.8 } ]
+      }
+    },
+    {
+      "id": "antarctica",
+      "name": "Estación antártica (invernada)",
+      "description": "Base en la meseta polar durante la invernada: presión y oxígeno bajos por la altitud, poco contacto exterior y aislamiento largo. Umbrales de demostración.",
+      "environment": { "type": "polar-station", "gravityG": 1, "distanceKm": 1350, "crewSize": 20, "habitableVolumeM3": 1800 },
+      "source": "nasa-antarctic",
+      "status": "heuristic",
+      "overrides": {
+        "pressure": [ { "status": "critical", "max": 55 }, { "status": "watch", "min": 55, "max": 62 }, { "status": "normal", "min": 62, "max": 75 }, { "status": "watch", "min": 75, "max": 80 }, { "status": "critical", "min": 80 } ],
+        "o2": [ { "status": "critical", "max": 90 }, { "status": "watch", "min": 90, "max": 100 }, { "status": "normal", "min": 100, "max": 125 }, { "status": "watch", "min": 125, "max": 140 }, { "status": "critical", "min": 140 } ],
+        "earthContact": [ { "status": "normal", "min": 5 }, { "status": "watch", "min": 2, "max": 5 }, { "status": "critical", "max": 2 } ],
+        "isolation": [ { "status": "normal", "max": 0.5 }, { "status": "watch", "min": 0.5, "max": 0.8 }, { "status": "critical", "min": 0.8 } ]
+      }
+    },
+    {
+      "id": "submarine",
+      "name": "Submarino",
+      "description": "Tripulación sumergida semanas: más CO₂ tolerado, luz tenue, contacto con tierra casi nulo y confinamiento alto por diseño. Umbrales de demostración.",
+      "environment": { "type": "submarine", "gravityG": 1, "distanceKm": 1200, "crewSize": 40, "habitableVolumeM3": 900 },
+      "source": "nasa-neemo",
+      "status": "heuristic",
+      "overrides": {
+        "co2": [ { "status": "normal", "min": 0, "max": 3.8 }, { "status": "watch", "min": 3.8, "max": 6 }, { "status": "critical", "min": 6 } ],
+        "humidity": [ { "status": "critical", "max": 30 }, { "status": "watch", "min": 30, "max": 40 }, { "status": "normal", "min": 40, "max": 70 }, { "status": "watch", "min": 70, "max": 80 }, { "status": "critical", "min": 80 } ],
+        "light": [ { "status": "critical", "max": 50 }, { "status": "watch", "min": 50, "max": 150 }, { "status": "normal", "min": 150 } ],
+        "earthContact": [ { "status": "normal", "min": 2 }, { "status": "watch", "min": 0.5, "max": 2 }, { "status": "critical", "max": 0.5 } ],
+        "isolation": [ { "status": "normal", "max": 0.6 }, { "status": "watch", "min": 0.6, "max": 0.85 }, { "status": "critical", "min": 0.85 } ],
+        "confinement": [ { "status": "normal", "max": 0.6 }, { "status": "watch", "min": 0.6, "max": 0.85 }, { "status": "critical", "min": 0.85 } ]
+      }
+    },
+    {
+      "id": "offshore",
+      "name": "Plataforma offshore",
+      "description": "Turnos de dos semanas en el mar: ruido de maquinaria, humedad y temperatura marinas, y enlace por satélite casi siempre disponible. Umbrales de demostración.",
+      "environment": { "type": "offshore-platform", "gravityG": 1, "distanceKm": 250, "crewSize": 30, "habitableVolumeM3": 1500 },
+      "source": "hse-offshore",
+      "status": "heuristic",
+      "overrides": {
+        "noise": [ { "status": "normal", "max": 80 }, { "status": "watch", "min": 80, "max": 90 }, { "status": "critical", "min": 90 } ],
+        "temperature": [ { "status": "critical", "max": 10 }, { "status": "watch", "min": 10, "max": 15 }, { "status": "normal", "min": 15, "max": 28 }, { "status": "watch", "min": 28, "max": 32 }, { "status": "critical", "min": 32 } ],
+        "humidity": [ { "status": "critical", "max": 30 }, { "status": "watch", "min": 30, "max": 40 }, { "status": "normal", "min": 40, "max": 80 }, { "status": "watch", "min": 80, "max": 90 }, { "status": "critical", "min": 90 } ],
+        "isolation": [ { "status": "normal", "max": 0.4 }, { "status": "watch", "min": 0.4, "max": 0.7 }, { "status": "critical", "min": 0.7 } ]
+      }
+    }
+  ],
   "phantomModel": {
     "status": "heuristic",
     "source": "nasa-hrp",
