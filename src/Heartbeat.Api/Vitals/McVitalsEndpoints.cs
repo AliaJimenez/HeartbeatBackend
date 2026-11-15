@@ -23,8 +23,25 @@ public static class McVitalsEndpoints
         group.MapGet("/radiation", GetRadiationAsync).RequirePermission(Permissions.VitalsView);
         group.MapGet("/environment", GetEnvironmentAsync).RequirePermission(Permissions.VitalsView);
         group.MapGet("/risk", GetRiskAsync).RequirePermission(Permissions.VitalsView);
+        group.MapGet("/vision", GetVisionAsync).RequirePermission(Permissions.VitalsView);
 
         return app;
+    }
+
+    private static async Task<IResult> GetVisionAsync(
+        Guid id, AppDbContext db, CancellationToken ct, DateTimeOffset? from = null, DateTimeOffset? to = null)
+    {
+        if (from is not null && to is not null && from > to)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["from"] = ["from must not be after to."] });
+        }
+
+        if (!await db.Astronauts.AnyAsync(a => a.Id == id, ct))
+        {
+            return AstronautNotFound();
+        }
+
+        return Results.Ok(await Crew.VisionSummaries.LoadAsync(db, id, from, to, ct));
     }
 
     private static async Task<IResult> GetRiskAsync(

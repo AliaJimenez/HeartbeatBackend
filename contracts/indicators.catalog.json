@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.15-2",
+  "version": "2026.11.15-3",
   "disclaimer": "Catalog of simulated indicators for the improvements track. Values are demo/heuristic unless marked verified; not a medical device.",
   "sources": {
     "nasa-hrp": { "title": "NASA Human Research Program - Hazards of Human Spaceflight", "url": "https://www.nasa.gov/hrp/hazards/" },
@@ -118,6 +118,17 @@
     { "id": "phantom-f55", "name": "Phantom C", "sex": "female", "ageYears": 55, "massKg": 58, "status": "heuristic" },
     { "id": "phantom-m28", "name": "Phantom D", "sex": "male", "ageYears": 28, "massKg": 72, "status": "heuristic" }
   ],
+  "vision": {
+    "note": "Rules for the SANS view (IOP and visual acuity): when a trend counts as stable and how a correlation with CO2 is read. Heuristic, simulated.",
+    "source": "nasa-sans",
+    "status": "heuristic",
+    "trend": {
+      "iop": { "stableDelta": 0.5 },
+      "visualAcuity": { "stableDelta": 0.05 },
+      "co2": { "stableDelta": 0.2 }
+    },
+    "correlation": { "against": "co2", "minPairs": 3, "weakBelow": 0.3, "strongFrom": 0.6 }
+  },
   "indicators": [
     { "id": "radiation", "name": "Radiación acumulada", "unit": "mSv", "hazard": "spaceRadiation", "source": "nasa-radiation-brief", "status": "verified", "baselineThreshold": 2.5, "bands": [ { "status": "normal", "min": 0, "max": 300 }, { "status": "watch", "min": 300, "max": 600 }, { "status": "critical", "min": 600 } ] },
     { "id": "radiationRate", "name": "Tasa de dosis", "unit": "mSv/día", "hazard": "spaceRadiation", "source": "nasa-radiation-brief", "status": "verified", "bands": [ { "status": "normal", "min": 0, "max": 1.5 }, { "status": "watch", "min": 1.5, "max": 3 }, { "status": "critical", "min": 3 } ] },

@@ -21,6 +21,10 @@ public static class EnvironmentReadings
     public static IndicatorCatalogEntry? EnvironmentIndicator(string? id)
         => IndicatorsCatalog.Find(id) is { Hazard: Hazard.HostileClosedEnvironment } entry ? entry : null;
 
+    /// <summary>IOP and visual acuity (HB-BE-05) travel in the same sync list and table, but belong to the vision view.</summary>
+    public static IndicatorCatalogEntry? VisionIndicator(string? id)
+        => VisionAnalysis.IsVisionIndicator(id) ? IndicatorsCatalog.Find(id) : null;
+
     public static IReadOnlyList<IndicatorCatalogEntry> EnvironmentIndicators()
         => IndicatorsCatalog.Cached.Where(e => e.Hazard == Hazard.HostileClosedEnvironment).ToList();
 
@@ -64,7 +68,7 @@ public static class EnvironmentReadings
                 continue;
             }
 
-            var entry = EnvironmentIndicator(dto.IndicatorId);
+            var entry = EnvironmentIndicator(dto.IndicatorId) ?? VisionIndicator(dto.IndicatorId);
             var error = Validate(dto, entry);
             if (error is not null)
             {
@@ -89,7 +93,7 @@ public static class EnvironmentReadings
             });
             accepted.Add(dto.Id);
 
-            if (band.Status == HealthStatus.Critical)
+            if (band.Status == HealthStatus.Critical && entry.Hazard == Hazard.HostileClosedEnvironment)
             {
                 await RaiseAlertAsync(db, astronautId, entry, band, dto.Value, serverNow, cancellationToken);
             }
@@ -177,7 +181,7 @@ public static class EnvironmentReadings
 
         var all = rows
             .Select(ToStatus)
-            .Where(r => r is not null)
+            .Where(r => r is not null && EnvironmentIndicator(r.IndicatorId) is not null)   // vision readings have their own view
             .Select(r => r!)
             .OrderByDescending(r => r.RecordedAt)
             .ToList();
@@ -199,7 +203,7 @@ public static class EnvironmentReadings
         return new EnvironmentSummaryDto(status, latest, new Paged<EnvironmentReadingStatus>(items, page, pageSize, filtered.Count));
     }
 
-    private static EnvironmentReadingStatus? ToStatus(EnvironmentReadingEntity r)
+    public static EnvironmentReadingStatus? ToStatus(EnvironmentReadingEntity r)
     {
         var entry = IndicatorsCatalog.Find(r.IndicatorId);
         if (entry is null)

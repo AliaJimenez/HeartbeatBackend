@@ -690,6 +690,26 @@ public sealed record RiskStatus(
     IsolationConfinementIndices? Indices = null);   // HB-BE-06
 ```
 
+### Presión ocular y visión, SANS (HB-BE-05, issue #113)
+
+IOP (`iop`, mmHg) y agudeza visual (`visualAcuity`, logMAR) entran por el mismo `environmentReadings` de `POST /api/crew/v1/sync` que el ambiente (misma tabla, idempotente por `id`), pero **no aparecen en `GET /crew/{id}/environment` ni crean alertas de ambiente**: tienen su propia vista. `GET /api/mc/v1/crew/{id}/vision?from=&to=` (`vitals.view`; 400 si `from` > `to`, 404 si el astronauta no existe) devuelve `VisionSummaryDto`:
+
+- `iop` y `visualAcuity` (`IndicatorTrend`): `direction` (`rising` | `falling` | `stable` | `unknown`), `change` y `slopePerDay` de la recta de mínimos cuadrados, `latest`, `status` (bandas del catálogo), `explanation` en lenguaje simple, `catalogStatus`, `source` y las `readings` del periodo (más antigua primero).
+- `iopVsCo2` y `visualAcuityVsCo2` (`Co2Correlation`): Pearson `r` entre las medias diarias (días UTC) del indicador y del CO₂ **del mismo periodo**, con `pairs` (días con ambos), `strength` (`weak` | `moderate` | `strong` | `unknown`) y una frase que aclara que una relación en datos simulados no prueba una causa. `r` es `null` mientras haya menos de `minPairs` días o una de las series no varíe.
+- `status` es el peor de IOP y agudeza. Todo es simulado (`simulated: true`) y no es un diagnóstico.
+
+Las reglas viven en la sección `vision` de `contracts/indicators.catalog.json` (con `source: nasa-sans` y `status: heuristic`): `trend.<id>.stableDelta` (cambio por debajo del cual la tendencia es `stable`) y `correlation` (`minPairs`, `weakBelow`, `strongFrom`). El cálculo es `VisionAnalysis` en `Heartbeat.Shared`, así que el escritorio lo repite sin conexión con el mismo resultado. La última lectura de IOP y de agudeza alimenta el peligro `gravityFields` de `/risk`.
+
+`IndicatorsCatalog.Evaluate` ya no lanza si un valor cae fuera de todas las bandas (IOP < 10 mmHg, gravedad > 1,1 g, CO₂ negativo): devuelve la banda `outside-range` ("Outside the usual range") en `watch`.
+
+```csharp
+public sealed record VisionSummaryDto(
+    HealthStatus Status, IndicatorTrend Iop, IndicatorTrend VisualAcuity,
+    Co2Correlation IopVsCo2, Co2Correlation VisualAcuityVsCo2,
+    CatalogStatus CatalogStatus, SourceLink Source, DateTimeOffset? From, DateTimeOffset? To, bool Simulated = true);
+// RiskInputs gains: IReadOnlyList<EnvironmentReadingStatus>? Vision = null (appended)
+```
+
 ### Motor de reglas y semáforo unificado (HB-BE-07, issue #103)
 
 `RiskEngine.Evaluate(RiskInputs)` en `Heartbeat.Shared` (puro, igual que `HealthEvaluator`: el escritorio calcula lo mismo sin conexión) devuelve un `RiskStatus` con **siempre los 5 peligros**, en el orden de `Hazard`, y un estado global que es el peor. `GET /api/mc/v1/crew/{id}/risk` (`vitals.view`, mismos `hoursWithoutContact` y `continuousStayHours` opcionales que `/mission`; 400 si son negativos, 404 si el astronauta no existe) lo calcula en el servidor con los datos guardados.
