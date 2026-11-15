@@ -62,3 +62,6 @@ public enum CatalogStatus
     Verified,
     Heuristic
 }
+
+// Alias used by the catalog and the UI.
+public enum CatalogStatusValue { Verified, Heuristic }

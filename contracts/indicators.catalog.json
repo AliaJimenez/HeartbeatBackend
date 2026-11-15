@@ -1,0 +1,35 @@
+{
+  "version": "2026.11.15-1",
+  "disclaimer": "Catalog of simulated indicators for the improvements track. Values are demo/heuristic unless marked verified; not a medical device.",
+  "sources": {
+    "nasa-hrp": { "title": "NASA Human Research Program - Hazards of Human Spaceflight", "url": "https://www.nasa.gov/hrp/hazards/" },
+    "nasa-radiation-brief": { "title": "Radiation Protection Technical Brief (NASA)", "url": "https://www.nasa.gov/wp-content/uploads/2023/04/radiation-protection-technical-brief-ochmo.pdf" },
+    "asc-csa-radiation": { "title": "Radiation and astronaut health (Canadian Space Agency)", "url": "https://www.asc-csa.gc.ca/eng/astronauts/space-medicine/radiation.asp" },
+    "nasa-co2": { "title": "CO2 (NASA HRP risk)", "url": "https://humanresearchroadmap.nasa.gov/risks/risk.cfm?i=95" },
+    "nasa-sans": { "title": "Spaceflight-Associated Neuro-ocular Syndrome (NASA)", "url": "https://www.nasa.gov/humans-in-space/space-station-research/spaceflight-associated-neuro-ocular-syndrome-sans/" },
+    "nasa-sleep": { "title": "Sleep Deprivation and Deficiency (NASA HRP)", "url": "https://humanresearchroadmap.nasa.gov/risks/risk.cfm?i=12" },
+    "nasa-team": { "title": "Team / Behavioral Health (NASA HRP)", "url": "https://humanresearchroadmap.nasa.gov/risks/risk.cfm?i=52" },
+    "nasa-delay": { "title": "Communication Delay (NASA HRP)", "url": "https://humanresearchroadmap.nasa.gov/risks/risk.cfm?i=99" },
+    "medline-iop": { "title": "Intraocular pressure (MedlinePlus)", "url": "https://medlineplus.gov/ency/article/003403.htm" },
+    "medline-cognition": { "title": "Cognitive testing (MedlinePlus)", "url": "https://medlineplus.gov/cognitivetesting.html" }
+  },
+  "indicators": [
+    { "id": "radiation", "name": "Radiación acumulada", "unit": "mSv", "hazard": "spaceRadiation", "source": "nasa-radiation-brief", "status": "verified", "bands": [ { "status": "normal", "min": 0, "max": 300 }, { "status": "watch", "min": 300, "max": 600 }, { "status": "critical", "min": 600 } ] },
+    { "id": "radiationRate", "name": "Tasa de dosis", "unit": "mSv/día", "hazard": "spaceRadiation", "source": "nasa-radiation-brief", "status": "verified", "bands": [ { "status": "normal", "min": 0, "max": 1.5 }, { "status": "watch", "min": 1.5, "max": 3 }, { "status": "critical", "min": 3 } ] },
+    { "id": "co2", "name": "Dióxido de carbono (pCO₂)", "unit": "mmHg", "hazard": "hostileClosedEnvironment", "source": "nasa-co2", "status": "heuristic", "bands": [ { "status": "normal", "min": 0, "max": 3 }, { "status": "watch", "min": 3, "max": 5 }, { "status": "critical", "min": 5 } ] },
+    { "id": "o2", "name": "Oxígeno parcial", "unit": "mmHg", "hazard": "hostileClosedEnvironment", "source": "nasa-co2", "status": "heuristic", "bands": [ { "status": "critical", "max": 140 }, { "status": "watch", "min": 140, "max": 160 }, { "status": "normal", "min": 160, "max": 180 }, { "status": "watch", "min": 180, "max": 200 }, { "status": "critical", "min": 200 } ] },
+    { "id": "pressure", "name": "Presión total de cabina", "unit": "kPa", "hazard": "hostileClosedEnvironment", "source": "nasa-co2", "status": "heuristic", "bands": [ { "status": "critical", "max": 90 }, { "status": "watch", "min": 90, "max": 95 }, { "status": "normal", "min": 95, "max": 105 }, { "status": "watch", "min": 105, "max": 110 }, { "status": "critical", "min": 110 } ] },
+    { "id": "temperature", "name": "Temperatura de cabina", "unit": "°C", "hazard": "hostileClosedEnvironment", "source": "nasa-co2", "status": "heuristic", "bands": [ { "status": "critical", "max": 18 }, { "status": "watch", "min": 18, "max": 20 }, { "status": "normal", "min": 20, "max": 24 }, { "status": "watch", "min": 24, "max": 26 }, { "status": "critical", "min": 26 } ] },
+    { "id": "humidity", "name": "Humedad de cabina", "unit": "%", "hazard": "hostileClosedEnvironment", "source": "nasa-co2", "status": "heuristic", "bands": [ { "status": "critical", "max": 30 }, { "status": "watch", "min": 30, "max": 40 }, { "status": "normal", "min": 40, "max": 60 }, { "status": "watch", "min": 60, "max": 70 }, { "status": "critical", "min": 70 } ] },
+    { "id": "light", "name": "Iluminación", "unit": "lux", "hazard": "hostileClosedEnvironment", "source": "nasa-co2", "status": "heuristic", "bands": [ { "status": "critical", "max": 100 }, { "status": "watch", "min": 100, "max": 200 }, { "status": "normal", "min": 200 } ] },
+    { "id": "noise", "name": "Ruido", "unit": "dB", "hazard": "hostileClosedEnvironment", "source": "nasa-co2", "status": "heuristic", "bands": [ { "status": "normal", "max": 55 }, { "status": "watch", "min": 55, "max": 70 }, { "status": "critical", "min": 70 } ] },
+    { "id": "iop", "name": "Presión intraocular (IOP)", "unit": "mmHg", "hazard": "gravityFields", "source": "nasa-sans", "status": "heuristic", "bands": [ { "status": "normal", "min": 10, "max": 21 }, { "status": "watch", "min": 21, "max": 25 }, { "status": "critical", "min": 25 } ] },
+    { "id": "visualAcuity", "name": "Agudeza visual", "unit": "logMAR", "hazard": "gravityFields", "source": "nasa-sans", "status": "heuristic", "bands": [ { "status": "normal", "max": 0.3 }, { "status": "watch", "min": 0.3, "max": 0.5 }, { "status": "critical", "min": 0.5 } ] },
+    { "id": "pvtb", "name": "PVT-B (vigilancia)", "unit": "ms", "hazard": "isolationAndConfinement", "source": "nasa-sleep", "status": "heuristic", "bands": [ { "status": "normal", "max": 355 }, { "status": "watch", "min": 355, "max": 400 }, { "status": "critical", "min": 400 } ] },
+    { "id": "stress", "name": "Estrés", "unit": "0-10", "hazard": "isolationAndConfinement", "source": "nasa-team", "status": "heuristic", "bands": [ { "status": "normal", "max": 4 }, { "status": "watch", "min": 4, "max": 7 }, { "status": "critical", "min": 7 } ] },
+    { "id": "cohesion", "name": "Cohesión de equipo", "unit": "0-10", "hazard": "isolationAndConfinement", "source": "nasa-team", "status": "heuristic", "bands": [ { "status": "normal", "min": 7 }, { "status": "watch", "min": 5, "max": 7 }, { "status": "critical", "max": 5 } ] },
+    { "id": "earthContact", "name": "Contacto con la Tierra", "unit": "min/día", "hazard": "isolationAndConfinement", "source": "nasa-team", "status": "heuristic", "bands": [ { "status": "normal", "min": 10 }, { "status": "watch", "min": 5, "max": 10 }, { "status": "critical", "max": 5 } ] },
+    { "id": "gravity", "name": "Gravedad", "unit": "g", "hazard": "gravityFields", "source": "nasa-hrp", "status": "heuristic", "bands": [ { "status": "normal", "min": 0.9, "max": 1.1 }, { "status": "watch", "min": 0.3, "max": 0.9 }, { "status": "critical", "max": 0.3 } ] },
+    { "id": "commDelay", "name": "Retardo de comunicación", "unit": "min", "hazard": "isolationAndConfinement", "source": "nasa-delay", "status": "heuristic", "bands": [ { "status": "normal", "max": 2 }, { "status": "watch", "min": 2, "max": 10 }, { "status": "critical", "min": 10 } ] }
+  ]
+}
