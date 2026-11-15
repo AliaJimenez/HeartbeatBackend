@@ -26,7 +26,8 @@ public sealed record RiskStatus(
     string Explanation,
     IReadOnlyList<HazardStatus> Hazards,
     IReadOnlyList<PersonalDeviation>? PersonalDeviations = null,
-    IsolationConfinementIndices? Indices = null)
+    IsolationConfinementIndices? Indices = null,
+    string? ProfileId = null)   // id of the domain profile whose thresholds were used; null = standard catalog
 {
     public HealthStatus GlobalStatus => Status;
     public HealthStatus OverallStatus => Status;

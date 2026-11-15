@@ -178,6 +178,51 @@ public class RiskApiTests : IDisposable
     }
 
     [Fact]
+    public async Task A_domain_profile_changes_the_light_with_the_same_data()
+    {
+        await Sync(env: [new EnvironmentReading(Guid.NewGuid(), Now.AddMinutes(-8), null, "noise", 90m)]);   // 90 dB
+
+        var standard = await Risk();
+        var mining = await Risk("?profile=mining");
+
+        Assert.Null(standard.ProfileId);
+        Assert.Equal("mining", mining.ProfileId);
+        Assert.Equal(HealthStatus.Critical, Of(standard, Hazard.HostileClosedEnvironment).Status);   // catalog: 70 dB and up
+        Assert.Equal(HealthStatus.Watch, Of(mining, Hazard.HostileClosedEnvironment).Status);        // mining: 85 to 100 dB
+    }
+
+    [Fact]
+    public async Task The_space_profile_and_no_profile_give_the_same_light()
+    {
+        await Sync(env: [new EnvironmentReading(Guid.NewGuid(), Now.AddMinutes(-8), null, "humidity", 75m)]);
+
+        var standard = await Risk();
+        var space = await Risk("?profile=SPACE");
+
+        Assert.Equal(standard.Status, space.Status);
+        Assert.Equal(standard.Hazards.Select(h => h.Status), space.Hazards.Select(h => h.Status));
+    }
+
+    [Fact]
+    public async Task A_profile_also_moves_the_isolation_thresholds()
+    {
+        var standard = await Risk("?hoursWithoutContact=24");
+        var antarctica = await Risk("?hoursWithoutContact=24&profile=antarctica");
+
+        Assert.Equal(standard.Indices!.Isolation.Value, antarctica.Indices!.Isolation.Value);   // same index, other thresholds
+        Assert.Equal("antarctica", antarctica.ProfileId);
+        Assert.NotEqual(standard.Indices.Isolation.Source, antarctica.Indices.Isolation.Source);
+    }
+
+    [Fact]
+    public async Task An_unknown_profile_is_a_400()
+    {
+        var res = await Mc(Permissions.VitalsView).GetAsync($"/api/mc/v1/crew/{_astronautId}/risk?profile=nope");
+
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+    }
+
+    [Fact]
     public async Task Unknown_astronaut_is_a_404_and_the_endpoint_requires_vitals_view()
     {
         Assert.Equal(HttpStatusCode.NotFound, (await Mc(Permissions.VitalsView).GetAsync($"/api/mc/v1/crew/{Guid.NewGuid()}/risk")).StatusCode);

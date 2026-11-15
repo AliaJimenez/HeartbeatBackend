@@ -46,6 +46,41 @@ public static class DomainProfiles
         return IndicatorsCatalog.Evaluate(entry, value);
     }
 
+    /// <summary>A catalog entry as the profile sees it; with no profile, the plain catalog entry.</summary>
+    public static IndicatorCatalogEntry? EntryFor(DomainProfile? profile, string? indicatorId)
+    {
+        var entry = IndicatorsCatalog.Find(indicatorId);
+        if (entry is null || profile is null || !profile.Overrides.TryGetValue(entry.Id, out var bands))
+        {
+            return entry;
+        }
+
+        return entry with { Bands = bands, Source = profile.SourceId, Status = profile.Status };
+    }
+
+    /// <summary>
+    /// The same habitat or vision reading judged with the profile's thresholds (status, label, catalog status and
+    /// source). The value itself never changes. Without a profile, or for an indicator it does not override, it
+    /// is returned as it is.
+    /// </summary>
+    public static EnvironmentReadingStatus Apply(DomainProfile? profile, EnvironmentReadingStatus reading)
+    {
+        if (profile is null || !profile.Overrides.ContainsKey(reading.IndicatorId))
+        {
+            return reading;
+        }
+
+        var entry = EntryFor(profile, reading.IndicatorId)!;
+        var band = IndicatorsCatalog.Evaluate(entry, reading.Value);
+        return reading with
+        {
+            Status = band.Status,
+            Label = string.IsNullOrWhiteSpace(band.Label) ? band.Status.ToString().ToLowerInvariant() : band.Label,
+            CatalogStatus = entry.Status,
+            Source = IndicatorsCatalog.SourceFor(entry),
+        };
+    }
+
     public static DomainProfileDto ToDto(DomainProfile profile)
     {
         var effective = Effective(profile);

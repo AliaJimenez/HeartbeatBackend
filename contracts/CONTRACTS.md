@@ -883,6 +883,8 @@ IReadOnlyList<IndicatorCatalogEntry> DomainProfiles.Effective(DomainProfile prof
 IndicatorBand DomainProfiles.Evaluate(DomainProfile profile, string indicatorId, decimal value);            // banda de un valor bajo ese perfil
 ```
 
+**El semáforo con un perfil.** `GET /api/mc/v1/crew/{id}/risk?profile=<id>` (opcional; el id de `/profiles`, sin distinguir mayúsculas; 400 si no existe) calcula el mismo semáforo con los umbrales del perfil en lugar de los del catálogo estándar. Sin `profile` nada cambia. Con perfil se juzgan de nuevo con sus umbrales las lecturas del hábitat y de visión, los índices de aislamiento y confinamiento y el retardo/gravedad planeados. Los valores no cambian, solo su banda, etiqueta y fuente. **No cambian** los signos vitales (`reference-ranges.json`) ni los límites de radiación acumulada (`RadiationDoses`): no son umbrales del perfil. `RiskStatus.profileId` dice qué perfil se usó (`null` = catálogo estándar). El entorno de la misión sigue siendo el del astronauta; el `environment` del perfil no lo reemplaza. En Shared: `RiskInputs.Domain`, `DomainProfiles.EntryFor` y `DomainProfiles.Apply`, así el escritorio repite el cálculo sin conexión.
+
 ### Relojes: asociación a un astronauta y FC en vivo protegida (WR-BIND, issue #152)
 
 Cada reloj (Galaxy Watch 5) está registrado para **un astronauta** y presenta una **clave propia**. Antes, `POST /api/heartrate`, `GET /latest`, `GET /recent` y el hub `/hubs/heartrate` eran anónimos y no sabían de quién era la lectura.

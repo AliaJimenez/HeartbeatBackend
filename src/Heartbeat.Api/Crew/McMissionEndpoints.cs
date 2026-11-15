@@ -57,7 +57,7 @@ public static class McMissionEndpoints
     /// continuous stay) are not stored per mission, so the apps pass what they know; 0 gives the profile-only index.
     /// A mission with no crew has no indices.
     /// </summary>
-    internal static MissionProfileDto ToDto(Mission mission, decimal hoursWithoutContact = 0m, decimal continuousStayHours = 0m)
+    internal static MissionProfileDto ToDto(Mission mission, decimal hoursWithoutContact = 0m, decimal continuousStayHours = 0m, DomainProfile? domain = null)
     {
         var profile = new EnvironmentProfile(
             string.IsNullOrWhiteSpace(mission.EnvironmentType) ? mission.Environment : mission.EnvironmentType,
@@ -73,6 +73,6 @@ public static class McMissionEndpoints
             mission.Environment,
             profile,
             (double)delay,
-            profile.CrewSize > 0 ? IsolationConfinement.Evaluate(profile, hoursWithoutContact, continuousStayHours) : null);
+            profile.CrewSize > 0 ? IsolationConfinement.Evaluate(profile, hoursWithoutContact, continuousStayHours, domain) : null);
     }
 }
