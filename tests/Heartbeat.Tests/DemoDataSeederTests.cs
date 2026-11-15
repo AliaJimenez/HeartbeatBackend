@@ -65,7 +65,7 @@ public class DemoDataSeederTests : IClassFixture<DemoDataSeederTests.Factory>
     [Fact]
     public async Task Creates_the_mission_three_astronauts_and_thirty_daily_check_ups_each()
     {
-        var mission = await Db(db => db.Missions.SingleAsync());
+        var mission = await Db(db => db.Missions.SingleAsync(m => m.Name == DemoDataSeeder.MissionName));
         Assert.Equal("Artemis Demo 1", mission.Name);
 
         foreach (var user in new[] { "a.rivera", "k.sato", "l.haddad" })
