@@ -56,8 +56,25 @@ public class McVitalsEndpointsTests : IClassFixture<McVitalsEndpointsTests.Facto
             Id = id, AstronautId = _astronautId, RecordedAt = T0.AddDays(day), ReceivedAt = T0.AddDays(day).AddMinutes(5),
             OverallStatus = s, RangesVersion = "2026.11.14-1", SupersedesId = supersedes,
         };
-        Reading R(Guid c, IndicatorType i, decimal v, decimal? v2, HealthStatus s, string bands) =>
-            new() { Id = Guid.NewGuid(), CheckUpId = c, Indicator = i, Value = v, SecondaryValue = v2, Status = s, BandIds = bands };
+        Reading R(
+            Guid c,
+            IndicatorType i,
+            decimal v,
+            decimal? v2,
+            HealthStatus s,
+            string bands,
+            ReadingSource source = ReadingSource.Manual) =>
+            new()
+            {
+                Id = Guid.NewGuid(),
+                CheckUpId = c,
+                Indicator = i,
+                Value = v,
+                SecondaryValue = v2,
+                Status = s,
+                BandIds = bands,
+                Source = source,
+            };
 
         db.CheckUps.AddRange(
             C(_okCheckUp, 0, HealthStatus.Normal),
@@ -67,7 +84,14 @@ public class McVitalsEndpointsTests : IClassFixture<McVitalsEndpointsTests.Facto
         db.Readings.AddRange(
             R(_okCheckUp, IndicatorType.HeartRate, 64, null, HealthStatus.Normal, "hr-normal"),
             R(_okCheckUp, IndicatorType.Sleep, 7, null, HealthStatus.Normal, "sleep-normal"),
-            R(_badCheckUp, IndicatorType.BloodPressure, 185, 95, HealthStatus.Critical, "bp-sys-critical-high,bp-dia-watch-high"));
+            R(
+                _badCheckUp,
+                IndicatorType.BloodPressure,
+                185,
+                95,
+                HealthStatus.Critical,
+                "bp-sys-critical-high,bp-dia-watch-high",
+                ReadingSource.Wearable));
         db.SaveChanges();
     }
 
@@ -155,10 +179,41 @@ public class McVitalsEndpointsTests : IClassFixture<McVitalsEndpointsTests.Facto
         Assert.Single(paged.Items);
     }
 
+    [Theory]
+    [InlineData("manual", 1)]
+    [InlineData("wearable", 1)]
+    [InlineData("all", 3)]
+    public async Task Checkups_filter_by_reading_source(string source, int expectedTotal)
+    {
+        var page = (await Client(Permissions.VitalsHistory)
+            .GetFromJsonAsync<Paged<CheckUpDto>>(
+                $"/api/mc/v1/crew/{_astronautId}/checkups?source={source}",
+                Json))!;
+
+        Assert.Equal(expectedTotal, page.Total);
+        if (source != "all")
+        {
+            Assert.All(
+                page.Items,
+                checkUp => Assert.Contains(
+                    checkUp.Readings,
+                    reading => reading.Source.ToString().Equals(source, StringComparison.OrdinalIgnoreCase)));
+        }
+    }
+
     [Fact]
     public async Task Checkups_reject_unknown_status()
     {
         var res = await Client(Permissions.VitalsHistory).GetAsync($"/api/mc/v1/crew/{_astronautId}/checkups?status=bogus");
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Checkups_reject_unknown_source()
+    {
+        var res = await Client(Permissions.VitalsHistory)
+            .GetAsync($"/api/mc/v1/crew/{_astronautId}/checkups?source=implant");
+
         Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
     }
 
