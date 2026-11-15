@@ -24,9 +24,72 @@ public static class McVitalsEndpoints
         group.MapGet("/environment", GetEnvironmentAsync).RequirePermission(Permissions.VitalsView);
         group.MapGet("/risk", GetRiskAsync).RequirePermission(Permissions.VitalsView);
         group.MapGet("/vision", GetVisionAsync).RequirePermission(Permissions.VitalsView);
+        group.MapGet("/export.csv", ExportCrewAsync).RequirePermission(Permissions.VitalsHistory);
+
+
+        // The whole mission, one CSV (HB-BE-10).
+        app.MapGet("/api/mc/v1/mission/export.csv", ExportMissionAsync).RequirePermission(Permissions.VitalsHistory);
 
         return app;
     }
+
+    private static async Task<IResult> ExportCrewAsync(
+        Guid id, AppDbContext db, RangesCatalog ranges, CancellationToken ct, DateTimeOffset? from = null, DateTimeOffset? to = null)
+    {
+        if (PeriodError(from, to) is { } invalid)
+        {
+            return invalid;
+        }
+
+        var astronaut = await db.Astronauts.AsNoTracking()
+            .Where(a => a.Id == id)
+            .Select(a => new { a.Id, a.DisplayName, a.UserName })
+            .FirstOrDefaultAsync(ct);
+        if (astronaut is null)
+        {
+            return AstronautNotFound();
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var csv = await Crew.CsvExports.BuildAsync(db, ranges, [new Crew.CsvExports.Person(astronaut.Id, astronaut.DisplayName)], from, to, now, ct);
+        return Results.File(Crew.CsvExports.ToBytes(csv), Crew.CsvExports.ContentType, Crew.CsvExports.FileName(astronaut.UserName, now));
+    }
+
+    private static async Task<IResult> ExportMissionAsync(
+        AppDbContext db, RangesCatalog ranges, CancellationToken ct,
+        Guid? missionId = null, DateTimeOffset? from = null, DateTimeOffset? to = null)
+    {
+        if (PeriodError(from, to) is { } invalid)
+        {
+            return invalid;
+        }
+
+        // Same default as GET /mission: the first mission by name, unless one is asked for.
+        var mission = await (missionId is { } wanted
+                ? db.Missions.AsNoTracking().Where(m => m.Id == wanted)
+                : db.Missions.AsNoTracking().OrderBy(m => m.Name))
+            .FirstOrDefaultAsync(ct);
+        if (mission is null)
+        {
+            return Results.Problem(title: "Mission not found", statusCode: StatusCodes.Status404NotFound);
+        }
+
+        var crew = (await db.Astronauts.AsNoTracking()
+                .Where(a => a.MissionId == mission.Id)
+                .Select(a => new { a.Id, a.DisplayName })
+                .ToListAsync(ct))
+            .Select(a => new Crew.CsvExports.Person(a.Id, a.DisplayName))
+            .ToList();
+
+        var now = DateTimeOffset.UtcNow;
+        var csv = await Crew.CsvExports.BuildAsync(db, ranges, crew, from, to, now, ct);
+        return Results.File(Crew.CsvExports.ToBytes(csv), Crew.CsvExports.ContentType, Crew.CsvExports.FileName("mission-" + mission.Name, now));
+    }
+
+    private static IResult? PeriodError(DateTimeOffset? from, DateTimeOffset? to)
+        => from is not null && to is not null && from > to
+            ? Results.ValidationProblem(new Dictionary<string, string[]> { ["from"] = ["from must not be after to."] })
+            : null;
 
     private static async Task<IResult> GetVisionAsync(
         Guid id, AppDbContext db, CancellationToken ct, DateTimeOffset? from = null, DateTimeOffset? to = null)

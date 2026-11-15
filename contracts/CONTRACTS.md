@@ -811,6 +811,30 @@ PhantomSimulation Phantoms.Simulate(PhantomProfile phantom, decimal gravityG, in
 
 Reglas (todas heuristicas y simuladas): el efecto se escala por `(1 - g)`; hueso y musculo cambian linealmente por semana; fluidos e IOP se acercan a un maximo; el ejercicio reduce el efecto hasta un 60 % con 10 h/semana; las mujeres y los mayores de 50 pierden mas hueso.
 
+### Exportar CSV (HB-BE-10, issue #122)
+
+Dos descargas, las dos con `vitals.history` (sin él, 403) y sin PDF:
+
+- `GET /api/mc/v1/crew/{id}/export.csv?from=&to=` → un astronauta (404 si no existe).
+- `GET /api/mc/v1/mission/export.csv?missionId=&from=&to=` → todos los astronautas de la misión. Sin `missionId` es la primera misión por nombre, igual que `GET /mission`; si no existe, 404.
+
+`from` mayor que `to` es un 400. El periodo filtra los registros fechados (signos vitales, dosis, lecturas), no el semáforo.
+
+Es un adjunto `text/csv; charset=utf-8` (`heartbeat-<astronauta o mission-nombre>-<yyyyMMdd>.csv`), UTF-8 con marca BOM para que las hojas de cálculo lean bien los acentos, líneas CRLF y comillas según RFC 4180. Es una sola tabla, una fila por registro, con esta cabecera:
+
+```
+astronaut_id,astronaut,record_type,recorded_at,indicator,value,secondary_value,unit,status,detail,source,catalog_status,simulated
+```
+
+| `record_type` | Qué es | `indicator` | `detail` | `simulated` |
+|---|---|---|---|---|
+| `risk` | el semáforo al momento de exportar: una fila `global` y una por peligro | `global` o el peligro (`spaceRadiation`…) | la explicación en lenguaje simple | `true` |
+| `vital` | cada lectura de cada check-up vigente (una corrección sustituye al check-up que corrige) | `bloodPressure`, `heartRate`… | la etiqueta de la banda | `false` |
+| `radiation` | cada dosis | `radiationDose` | el tipo (`gcr`, `spe`, `trapped`) | `true` |
+| `environment` | cada lectura de ambiente, IOP y agudeza visual | el id del catálogo (`co2`, `iop`…) | la etiqueta de la banda | `true` |
+
+Orden: astronauta, tipo (`risk`, `vital`, `radiation`, `environment`) y fecha ascendente. `recorded_at` es UTC ISO 8601; los números usan punto decimal siempre. `status` es `normal`, `watch` o `critical`, y `source` y `catalog_status` salen de los catálogos. **Nunca se exportan** las notas de los check-ups, los mensajes, las notas del perfil ni la fecha de nacimiento. Las celdas de texto que empiezan por `=`, `+`, `-` o `@` llevan un apóstrofo delante para que una hoja de cálculo no las ejecute como fórmula.
+
 ### Comparación de phantoms (HB-BE-08, issue #117)
 
 `GET /api/mc/v1/phantoms/compare?profiles=&environment=&weeks=&exerciseHours=` (cualquier usuario de Mission Control con sesión; datos de catálogo, sin datos personales) simula la misma estancia para varios phantoms y devuelve una serie por perfil:
