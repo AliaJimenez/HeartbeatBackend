@@ -354,6 +354,16 @@ public static class CrewEndpoints
             a.AcknowledgeNote,
             a.RadiationDoseId)).ToList();
 
+        // Read receipts (#92): Mission Control read one of this astronaut's messages since the last pull.
+        var readReceipts = (await db.Messages.AsNoTracking()
+                .Where(m => m.AstronautId == userId.Value && m.Direction == MessageDirection.ToMissionControl && m.ReadAt != null)
+                .Select(m => new { m.Id, m.ReadAt })
+                .ToListAsync(cancellationToken))
+            .Where(m => !lastPulled.HasValue || m.ReadAt > lastPulled.Value)
+            .OrderBy(m => m.ReadAt)
+            .Select(m => new ReadReceipt(m.Id, m.ReadAt!.Value))
+            .ToList();
+
         await db.SaveChangesAsync(cancellationToken);
 
         var rangesUpdateAvailable = request.RangesVersion != evaluator.RangesVersion;
@@ -363,7 +373,7 @@ public static class CrewEndpoints
             accepted,
             rejected,
             responseProfile,
-            new SyncInbound(inboundMessages, acknowledgedAlerts),
+            new SyncInbound(inboundMessages, acknowledgedAlerts, readReceipts),
             rangesUpdateAvailable,
             radiationTotal));
     }

@@ -220,6 +220,30 @@ public class McMessagesEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task Read_receipts_reach_the_astronaut_in_the_next_sync_exactly_once()
+    {
+        var checkUpId = Guid.NewGuid();
+        var reportId = Guid.NewGuid();
+        var unreadId = Guid.NewGuid();
+        var pushed = await Sync(Crew(), [CheckUp(checkUpId)], [Report(reportId, checkUpId), Report(unreadId, null, "Other")]);
+        Assert.Empty(pushed.Inbound.ReadReceipts!);   // nothing read yet
+
+        Assert.Equal(HttpStatusCode.NoContent, (await McAll().PostAsync($"/api/mc/v1/messages/{reportId}/read", null)).StatusCode);
+        var readAt = (await List()).Items.Single(m => m.Id == reportId).ReadAt;
+
+        var first = await Sync(Crew(), lastPulled: pushed.ServerTime);
+        var receipt = Assert.Single(first.Inbound.ReadReceipts!);
+        Assert.Equal((reportId, readAt), (receipt.MessageId, (DateTimeOffset?)receipt.ReadAt));
+
+        // Not repeated once the desktop advances lastPulledAt, and never sent to another astronaut.
+        Assert.Empty((await Sync(Crew(), lastPulled: first.ServerTime)).Inbound.ReadReceipts!);
+        Assert.Empty((await Sync(Crew(_otherAstronautId))).Inbound.ReadReceipts!);
+
+        // A first sync (lastPulledAt null) gets every receipt.
+        Assert.Single((await Sync(Crew())).Inbound.ReadReceipts!);
+    }
+
+    [Fact]
     public async Task Portal_reply_is_delivered_in_the_next_sync_exactly_once()
     {
         var res = await Mc(_surgeonId, Permissions.MessagesSend, Permissions.MessagesView)

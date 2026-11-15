@@ -333,7 +333,8 @@ One call pushes everything pending and pulls everything new. It is idempotent: s
   "profile": { /* AstronautProfile, if the server copy is newer */ },
   "inbound": {
     "messages": [ /* MessageDto[], direction "toAstronaut", created since lastPulledAt */ ],
-    "acknowledgedAlerts": [ { "checkUpId": "0193a…", "acknowledgedAt": "…", "by": "Dr. Okafor", "note": "Rest 24h, recheck" } ]
+    "acknowledgedAlerts": [ { "checkUpId": "0193a…", "acknowledgedAt": "…", "by": "Dr. Okafor", "note": "Rest 24h, recheck" } ],
+    "readReceipts": [ { "messageId": "0193e…", "readAt": "2026-11-14T12:00:00Z" } ]   // optional; see rules below
   },
   "rangesUpdateAvailable": false,              // true → GET /reference-ranges
   "radiationTotalMsv": 12.84                   // the astronaut's cumulative dose after this sync
@@ -348,6 +349,7 @@ Server rules:
 - Accept at most 500 check-ups per call; the desktop sends them in batches, oldest first.
 - Radiation doses are idempotent by `id` (a repeated id is accepted and counted once). A dose that is 0 or less, above 500 mSv, has a note over 200 characters, or reuses an id that belongs to another astronaut goes to `rejected` with the reason; the rest of the batch is still stored.
 - Readings are append-only, so nothing can conflict apart from the profile.
+- `inbound.readReceipts` lists the astronaut's own `toMissionControl` messages that Mission Control marked as read (`POST /messages/{id}/read`) after `lastPulledAt` (all of them when `lastPulledAt` is null), oldest first. Clients that do not know the field ignore it; older servers omit it, so treat a missing field as an empty list.
 
 Desktop rules:
 - Try to sync on start-up, after each save, and every 60 s while the link is up. Show a "last synced" time and a pending count.
