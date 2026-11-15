@@ -719,6 +719,19 @@ public sealed record PhantomProfile(
     decimal IopChangeMmHg = 0m);
 ```
 
+### Phantoms: catalogo y simulacion (issue #116)
+
+`contracts/indicators.catalog.json` trae `phantoms` (4 perfiles: sexo, edad, masa) y `phantomModel` (parametros del modelo, `status: heuristic`). En `Heartbeat.Shared`:
+
+```csharp
+IReadOnlyList<PhantomProfile> Phantoms.Profiles;                      // perfiles del catalogo, sin cambios
+PhantomSimulation Phantoms.Simulate(PhantomProfile phantom, decimal gravityG, int weeks, decimal exerciseHoursPerWeek);
+```
+
+`PhantomSimulation` devuelve el `PhantomProfile` con `boneChangePercent`, `muscleChangePercent`, `fluidChangePercent` e `iopChangeMmHg`, mas el cambio por region de la figura corporal del escritorio (`height`, `neck`, `chest`, `waist`, `thigh`, `calf`). Es determinista: misma entrada, misma salida. El `id` de cada phantom es estable (hash del id del catalogo).
+
+Reglas (todas heuristicas y simuladas): el efecto se escala por `(1 - g)`; hueso y musculo cambian linealmente por semana; fluidos e IOP se acercan a un maximo; el ejercicio reduce el efecto hasta un 60 % con 10 h/semana; las mujeres y los mayores de 50 pierden mas hueso.
+
 ### CatalogStatus y RadiationType (enums)
 
 Ver arriba. Los umbrales del catálogo (`contracts/indicators.catalog.json`) llevan `source` y `status: verified | heuristic`. `CatalogStatus` refleja ese estado en código. `RadiationType` clasifica una dosis/ambiente: `gcr` (radiación galáctica cósmica), `spe` (evento de partículas solares), `trapped` (radiación atrapada).
