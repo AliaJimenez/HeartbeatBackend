@@ -121,20 +121,7 @@ public static class IndicatorsCatalog
         // No gaps / overlaps between bands of the same indicator: every band covers min <= value < max.
         foreach (var entry in entries)
         {
-            var sorted = entry.Bands.OrderBy(b => b.Min ?? decimal.MinValue).ToList();
-            decimal? previousMax = null;
-            foreach (var band in sorted)
-            {
-                if (previousMax.HasValue && band.Min.HasValue && band.Min.Value != previousMax.Value)
-                {
-                    throw new InvalidOperationException($"Indicator '{entry.Id}' has a gap between {previousMax} and {band.Min}.");
-                }
-                if (band.Min.HasValue && band.Max.HasValue && band.Min.Value >= band.Max.Value)
-                {
-                    throw new InvalidOperationException($"Indicator '{entry.Id}' has an empty or inverted band.");
-                }
-                previousMax = band.Max;
-            }
+            ValidateBands(entry.Id, entry.Bands);
         }
 
         // Every source id referenced by an indicator must exist in the file's sources.
@@ -179,6 +166,25 @@ public static class IndicatorsCatalog
         return entries;
     }
 
+    /// <summary>The bands of one indicator must not overlap, leave gaps or be empty (each covers min &lt;= value &lt; max).</summary>
+    internal static void ValidateBands(string indicatorId, IReadOnlyList<IndicatorBand> bands)
+    {
+        var sorted = bands.OrderBy(b => b.Min ?? decimal.MinValue).ToList();
+        decimal? previousMax = null;
+        foreach (var band in sorted)
+        {
+            if (previousMax.HasValue && band.Min.HasValue && band.Min.Value != previousMax.Value)
+            {
+                throw new InvalidOperationException($"Indicator '{indicatorId}' has a gap between {previousMax} and {band.Min}.");
+            }
+            if (band.Min.HasValue && band.Max.HasValue && band.Min.Value >= band.Max.Value)
+            {
+                throw new InvalidOperationException($"Indicator '{indicatorId}' has an empty or inverted band.");
+            }
+            previousMax = band.Max;
+        }
+    }
+
     private static readonly Lazy<IReadOnlyList<IndicatorCatalogEntry>> _all = new(All);
 
     /// <summary>The catalog entries, parsed and validated once.</summary>
@@ -187,15 +193,23 @@ public static class IndicatorsCatalog
     public static IndicatorCatalogEntry? Find(string? id)
         => id is null ? null : Cached.FirstOrDefault(e => string.Equals(e.Id, id, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The band a value falls in: <c>Min &lt;= value &lt; Max</c> (an open end is unbounded).</summary>
+    /// <summary>
+    /// The band a value falls in: <c>Min &lt;= value &lt; Max</c> (an open end is unbounded). Some entries do not cover the whole
+    /// line (IOP below 10 mmHg, gravity above 1.1 g, a negative CO2): a value outside every band is not normal, so it
+    /// comes back as <see cref="OutsideBand"/> (watch) instead of failing.
+    /// </summary>
     public static IndicatorBand Evaluate(IndicatorCatalogEntry entry, decimal value)
-        => entry.Bands.FirstOrDefault(b => (b.Min is null || value >= b.Min) && (b.Max is null || value < b.Max))
-           ?? throw new InvalidOperationException($"Indicator '{entry.Id}' has no band for {value}.");
+        => entry.Bands.FirstOrDefault(b => (b.Min is null || value >= b.Min) && (b.Max is null || value < b.Max)) ?? OutsideBand;
+
+    public static readonly IndicatorBand OutsideBand =
+        new("outside-range", HealthStatus.Watch, null, null, "Outside the usual range");
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SourceLink> _sources = new();
 
-    public static SourceLink SourceFor(IndicatorCatalogEntry entry)
-        => _sources.GetOrAdd(entry.Source, id =>
+    public static SourceLink SourceFor(IndicatorCatalogEntry entry) => SourceFor(entry.Source);
+
+    public static SourceLink SourceFor(string sourceId)
+        => _sources.GetOrAdd(sourceId, id =>
         {
             using var doc = Parse();
             var source = doc.RootElement.GetProperty("sources").GetProperty(id);

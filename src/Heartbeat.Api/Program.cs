@@ -5,14 +5,17 @@ using Heartbeat.Api.Data;
 using Heartbeat.Api.Data.Entities;
 using Heartbeat.Api.Data.Seeding;
 using Heartbeat.Api.Deployment;
+using Heartbeat.Api.Live;
 using Heartbeat.Api.Messages;
 using Heartbeat.Api.Roles;
+using Heartbeat.Api.Salud;
 using Heartbeat.Api.Users;
 using Heartbeat.Api.Vitals;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -78,6 +81,24 @@ builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
 
 builder.Services.AddSingleton<JwtTokenService>();
 
+// FC en vivo del Galaxy Watch 5 (Live/): búfer en memoria y difusión por SignalR.
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<HeartRateBuffer>();
+
+// Datos de Samsung Health desde el backend Python WatchSync (Salud/). La contraseña va en user-secrets.
+builder.Services.Configure<WatchSyncOptions>(builder.Configuration.GetSection("WatchSync"));
+builder.Services.AddSingleton<System.Net.CookieContainer>();
+builder.Services.AddHttpClient<WatchSyncClient>((sp, http) =>
+{
+    var o = sp.GetRequiredService<IOptions<WatchSyncOptions>>().Value;
+    http.BaseAddress = new Uri(o.BaseUrl.TrimEnd('/') + "/");
+    http.Timeout = TimeSpan.FromSeconds(10);
+}).ConfigurePrimaryHttpMessageHandler(sp => new HttpClientHandler
+{
+    UseCookies = true,
+    CookieContainer = sp.GetRequiredService<System.Net.CookieContainer>(),
+});
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -105,7 +126,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// El reloj llama por HTTP sin TLS y no sigue redirecciones: las rutas en vivo quedan fuera de la redirección a HTTPS.
+app.UseWhen(ctx => !ctx.Request.Path.StartsWithSegments("/api/heartrate")
+                   && !ctx.Request.Path.StartsWithSegments("/hubs/heartrate"),
+            branch => branch.UseHttpsRedirection());
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -118,12 +142,17 @@ app.MapGet("/health", async (AppDbContext db, CancellationToken ct) =>
 app.MapAuthEndpoints();
 app.MapMcCrewEndpoints();
 app.MapMcMissionEndpoints();
+app.MapMcPhantomsEndpoints();
+app.MapMcProfilesEndpoints();
 app.MapMcVitalsEndpoints();
 app.MapMcRolesEndpoints();
 app.MapMcUsersEndpoints();
 app.MapMcAlertsEndpoints();
 app.MapMcMessagesEndpoints();
 app.MapCrewEndpoints();
+app.MapHub<HeartRateHub>("/hubs/heartrate");
+app.MapLiveHeartRate();
+app.MapSalud();
 
 app.Run();
 

@@ -18,7 +18,7 @@ Todo lo que no mide la tripulación está marcado como **"Datos simulados"** en 
 - **IOP / visión y PVT-B (vigilancia)**: valores simulados, incluida la racha de privación de sueño de Kenji.
 - **Aislamiento y confinamiento**: índices calculados con las fórmulas del catálogo sobre datos simulados.
 - **Phantoms**: perfiles digitales con cambios simulados de hueso, músculo, fluidos e IOP.
-- **Perfiles comerciales** (minería, Antártida, submarino, offshore): mismos peligros con otros umbrales.
+- **Perfiles comerciales** (minería, Antártida, submarino, offshore): mismos peligros con otros umbrales. Viven en `profiles` de `contracts/indicators.catalog.json` y salen por `GET /api/mc/v1/profiles`. Todos sus umbrales y entornos típicos son `heuristic`: las fuentes (NIOSH, NASA analogs, HSE) describen el dominio, no publican estos umbrales.
 
 Nada de esto es un diagnóstico médico. La app es una herramienta de autoevaluación.
 

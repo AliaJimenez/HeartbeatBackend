@@ -690,6 +690,52 @@ public sealed record RiskStatus(
     IsolationConfinementIndices? Indices = null);   // HB-BE-06
 ```
 
+### Presión ocular y visión, SANS (HB-BE-05, issue #113)
+
+IOP (`iop`, mmHg) y agudeza visual (`visualAcuity`, logMAR) entran por el mismo `environmentReadings` de `POST /api/crew/v1/sync` que el ambiente (misma tabla, idempotente por `id`), pero **no aparecen en `GET /crew/{id}/environment` ni crean alertas de ambiente**: tienen su propia vista. `GET /api/mc/v1/crew/{id}/vision?from=&to=` (`vitals.view`; 400 si `from` > `to`, 404 si el astronauta no existe) devuelve `VisionSummaryDto`:
+
+- `iop` y `visualAcuity` (`IndicatorTrend`): `direction` (`rising` | `falling` | `stable` | `unknown`), `change` y `slopePerDay` de la recta de mínimos cuadrados, `latest`, `status` (bandas del catálogo), `explanation` en lenguaje simple, `catalogStatus`, `source` y las `readings` del periodo (más antigua primero).
+- `iopVsCo2` y `visualAcuityVsCo2` (`Co2Correlation`): Pearson `r` entre las medias diarias (días UTC) del indicador y del CO₂ **del mismo periodo**, con `pairs` (días con ambos), `strength` (`weak` | `moderate` | `strong` | `unknown`) y una frase que aclara que una relación en datos simulados no prueba una causa. `r` es `null` mientras haya menos de `minPairs` días o una de las series no varíe.
+- `status` es el peor de IOP y agudeza. Todo es simulado (`simulated: true`) y no es un diagnóstico.
+
+Las reglas viven en la sección `vision` de `contracts/indicators.catalog.json` (con `source: nasa-sans` y `status: heuristic`): `trend.<id>.stableDelta` (cambio por debajo del cual la tendencia es `stable`) y `correlation` (`minPairs`, `weakBelow`, `strongFrom`). El cálculo es `VisionAnalysis` en `Heartbeat.Shared`, así que el escritorio lo repite sin conexión con el mismo resultado. La última lectura de IOP y de agudeza alimenta el peligro `gravityFields` de `/risk`.
+
+`IndicatorsCatalog.Evaluate` ya no lanza si un valor cae fuera de todas las bandas (IOP < 10 mmHg, gravedad > 1,1 g, CO₂ negativo): devuelve la banda `outside-range` ("Outside the usual range") en `watch`.
+
+```csharp
+public sealed record VisionSummaryDto(
+    HealthStatus Status, IndicatorTrend Iop, IndicatorTrend VisualAcuity,
+    Co2Correlation IopVsCo2, Co2Correlation VisualAcuityVsCo2,
+    CatalogStatus CatalogStatus, SourceLink Source, DateTimeOffset? From, DateTimeOffset? To, bool Simulated = true);
+// RiskInputs gains: IReadOnlyList<EnvironmentReadingStatus>? Vision = null (appended)
+```
+
+### Motor de reglas y semáforo unificado (HB-BE-07, issue #103)
+
+`RiskEngine.Evaluate(RiskInputs)` en `Heartbeat.Shared` (puro, igual que `HealthEvaluator`: el escritorio calcula lo mismo sin conexión) devuelve un `RiskStatus` con **siempre los 5 peligros**, en el orden de `Hazard`, y un estado global que es el peor. `GET /api/mc/v1/crew/{id}/risk` (`vitals.view`, mismos `hoursWithoutContact` y `continuousStayHours` opcionales que `/mission`; 400 si son negativos, 404 si el astronauta no existe) lo calcula en el servidor con los datos guardados.
+
+```csharp
+public sealed record RiskInputs(
+    CheckUpEvaluation? Vitals = null,                       // última lectura de cada signo vital, evaluada con HealthEvaluator
+    RadiationSummaryDto? Radiation = null,
+    IReadOnlyList<EnvironmentReadingStatus>? Environment = null,   // última lectura de cada indicador de ambiente
+    EnvironmentProfile? Profile = null,
+    IsolationConfinementIndices? Isolation = null,
+    IReadOnlyList<PersonalDeviation>? Deviations = null);
+```
+
+Qué alimenta cada peligro (los umbrales viven en los catálogos, no en el motor):
+
+| Peligro | Entradas |
+|---|---|
+| `spaceRadiation` | dosis acumulada contra 600 mSv y mayor SPE contra 250 mSv (el peor de los dos); fuente CSA |
+| `hostileClosedEnvironment` | lecturas de ambiente (bandas de `indicators.catalog.json`) + glucosa y temperatura corporal |
+| `gravityFields` | presión arterial y frecuencia cardíaca + gravedad del perfil de la misión |
+| `isolationAndConfinement` | sueño y ánimo + índices de aislamiento y confinamiento |
+| `distanceFromEarth` | retardo de comunicación (`distanceKm / c`) contra la banda `commDelay` |
+
+El peligro de cada signo vital sale del campo `hazard` de `reference-ranges.json`. Cada peligro no verde trae `explanation` en lenguaje simple (qué indicador, en qué banda, el primer consejo y "simulated" donde aplica), y `value`, `limit` (el borde de la banda normal que se cruzó), `unit` y `source` del peor hallazgo. **Gravedad y distancia salen del perfil de la misión, que es la condición planificada, no una incidencia: pueden poner el peligro en `watch` pero nunca en `critical` por sí solas** (0 g es `critical` en el catálogo y pondría rojo a toda la estación). Los datos medidos no tienen tope. Todo es simulado y no es un diagnóstico.
+
 ### Aislamiento y confinamiento (HB-BE-06, issue #111)
 
 Los dos índices (0 a 1, más alto es peor) de `IsolationConfinement` en Shared llegan a las apps en `GET /api/crew/v1/mission` y `GET /api/mc/v1/mission` (`crew.view`), dentro de `MissionProfileDto.indices`, y en `RiskStatus.indices`. Cada índice se coloca en la banda de su entrada del catálogo (`isolation` y `confinement` en `contracts/indicators.catalog.json`), con su `catalogStatus` (`heuristic`) y su `source`. Todo es simulado (`simulated: true`) y no es un diagnóstico.
@@ -764,6 +810,78 @@ PhantomSimulation Phantoms.Simulate(PhantomProfile phantom, decimal gravityG, in
 `PhantomSimulation` devuelve el `PhantomProfile` con `boneChangePercent`, `muscleChangePercent`, `fluidChangePercent` e `iopChangeMmHg`, mas el cambio por region de la figura corporal del escritorio (`height`, `neck`, `chest`, `waist`, `thigh`, `calf`). Es determinista: misma entrada, misma salida. El `id` de cada phantom es estable (hash del id del catalogo).
 
 Reglas (todas heuristicas y simuladas): el efecto se escala por `(1 - g)`; hueso y musculo cambian linealmente por semana; fluidos e IOP se acercan a un maximo; el ejercicio reduce el efecto hasta un 60 % con 10 h/semana; las mujeres y los mayores de 50 pierden mas hueso.
+
+### Exportar CSV (HB-BE-10, issue #122)
+
+Dos descargas, las dos con `vitals.history` (sin él, 403) y sin PDF:
+
+- `GET /api/mc/v1/crew/{id}/export.csv?from=&to=` → un astronauta (404 si no existe).
+- `GET /api/mc/v1/mission/export.csv?missionId=&from=&to=` → todos los astronautas de la misión. Sin `missionId` es la primera misión por nombre, igual que `GET /mission`; si no existe, 404.
+
+`from` mayor que `to` es un 400. El periodo filtra los registros fechados (signos vitales, dosis, lecturas), no el semáforo.
+
+Es un adjunto `text/csv; charset=utf-8` (`heartbeat-<astronauta o mission-nombre>-<yyyyMMdd>.csv`), UTF-8 con marca BOM para que las hojas de cálculo lean bien los acentos, líneas CRLF y comillas según RFC 4180. Es una sola tabla, una fila por registro, con esta cabecera:
+
+```
+astronaut_id,astronaut,record_type,recorded_at,indicator,value,secondary_value,unit,status,detail,source,catalog_status,simulated
+```
+
+| `record_type` | Qué es | `indicator` | `detail` | `simulated` |
+|---|---|---|---|---|
+| `risk` | el semáforo al momento de exportar: una fila `global` y una por peligro | `global` o el peligro (`spaceRadiation`…) | la explicación en lenguaje simple | `true` |
+| `vital` | cada lectura de cada check-up vigente (una corrección sustituye al check-up que corrige) | `bloodPressure`, `heartRate`… | la etiqueta de la banda | `false` |
+| `radiation` | cada dosis | `radiationDose` | el tipo (`gcr`, `spe`, `trapped`) | `true` |
+| `environment` | cada lectura de ambiente, IOP y agudeza visual | el id del catálogo (`co2`, `iop`…) | la etiqueta de la banda | `true` |
+
+Orden: astronauta, tipo (`risk`, `vital`, `radiation`, `environment`) y fecha ascendente. `recorded_at` es UTC ISO 8601; los números usan punto decimal siempre. `status` es `normal`, `watch` o `critical`, y `source` y `catalog_status` salen de los catálogos. **Nunca se exportan** las notas de los check-ups, los mensajes, las notas del perfil ni la fecha de nacimiento. Las celdas de texto que empiezan por `=`, `+`, `-` o `@` llevan un apóstrofo delante para que una hoja de cálculo no las ejecute como fórmula.
+
+### Comparación de phantoms (HB-BE-08, issue #117)
+
+`GET /api/mc/v1/phantoms/compare?profiles=&environment=&weeks=&exerciseHours=` (cualquier usuario de Mission Control con sesión; datos de catálogo, sin datos personales) simula la misma estancia para varios phantoms y devuelve una serie por perfil:
+
+| Parámetro | Valor | Por defecto |
+|---|---|---|
+| `profiles` | ids, nombres o Guid separados por comas (`phantom-f35,Phantom C`) | todos los del catálogo |
+| `environment` | `station`, `spacecraft`, `lunarBase`, `marsBase`, o el id de un perfil de dominio (`mining`: 1 g, sin cambio) | `station` |
+| `weeks` | 1 a 104 (`phantomModel.maxWeeks`) | 26 |
+| `exerciseHours` | horas de ejercicio por semana, 0 a 40 | 7 |
+
+Cualquier valor no válido o desconocido es un 400 con el campo nombrado. La gravedad de cada entorno, los valores por defecto y los límites viven en `phantomModel.environments` y `phantomModel.compare` de `contracts/indicators.catalog.json` (`status: heuristic`); el modelo es el de `Phantoms.Simulate`. El cálculo es `PhantomComparison.Compare` en `Heartbeat.Shared`, así que el portal y el escritorio pueden repetirlo sin servidor con el mismo resultado. Todo es simulado (`simulated: true`) y no es un pronóstico ni un diagnóstico.
+
+```csharp
+public sealed record PhantomComparisonDto(
+    string Environment, string EnvironmentName, decimal GravityG, int Weeks, decimal ExerciseHoursPerWeek,
+    CatalogStatus Status, SourceLink Source, IReadOnlyList<PhantomSeries> Series, string Note, bool Simulated = true);
+public sealed record PhantomSeries(
+    PhantomProfile Phantom,                    // el perfil al empezar, sin cambios
+    IReadOnlyList<PhantomPoint> Points,        // una por semana, de 0 a weeks
+    PhantomPoint Final,                        // la última
+    IReadOnlyList<PhantomRegionChange> Regions);   // cambio por región de la figura al final
+public sealed record PhantomPoint(int Week, decimal BoneChangePercent, decimal MuscleChangePercent, decimal FluidChangePercent, decimal IopChangeMmHg);
+public sealed record PhantomEnvironment(string Key, string Name, decimal GravityG);
+```
+
+### Perfiles de dominio comercial (HB-BE-11, issue #120)
+
+`contracts/indicators.catalog.json` trae `profiles`: `space` (referencia, sin cambios sobre el catálogo) y cuatro perfiles comerciales (`mining`, `antarctica`, `submarine`, `offshore`). Un perfil es un entorno típico (`environment`, mismo formato que `EnvironmentProfile`) más `overrides`: por indicador, las bandas que reemplazan a las del catálogo. Los **5 peligros, los indicadores y las unidades son los del catálogo**; solo cambian los umbrales. Todos los valores son `heuristic` y simulados, con la `source` del perfil (el catálogo valida que las bandas no se solapen ni dejen huecos, y que cada override apunte a un indicador existente).
+
+`GET /api/mc/v1/profiles` (cualquier usuario de Mission Control con sesión) → `DomainProfileDto[]`, con los 5 peligros en cada perfil. `DistanceFromEarth` va vacío: el catálogo no tiene indicadores de ese peligro (el retardo vive en `isolationAndConfinement`).
+
+```csharp
+public sealed record ProfileBandDto(HealthStatus Status, decimal? Min, decimal? Max);   // Min <= value < Max
+public sealed record ProfileIndicatorDto(
+    string IndicatorId, string Name, string Unit, CatalogStatus CatalogStatus, SourceLink Source,
+    bool Overridden, IReadOnlyList<ProfileBandDto> Bands);      // Overridden: umbrales propios del perfil
+public sealed record ProfileHazardDto(Hazard Hazard, IReadOnlyList<ProfileIndicatorDto> Indicators);
+public sealed record DomainProfileDto(
+    string Id, string Name, string Description, EnvironmentProfile Environment,
+    CatalogStatus Status, SourceLink Source, IReadOnlyList<ProfileHazardDto> Hazards, bool Simulated = true);
+
+// Heartbeat.Shared
+IReadOnlyList<DomainProfile> DomainProfiles.All;
+IReadOnlyList<IndicatorCatalogEntry> DomainProfiles.Effective(DomainProfile profile);                       // catálogo con los umbrales del perfil
+IndicatorBand DomainProfiles.Evaluate(DomainProfile profile, string indicatorId, decimal value);            // banda de un valor bajo ese perfil
+```
 
 ### CatalogStatus y RadiationType (enums)
 
