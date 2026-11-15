@@ -11,6 +11,7 @@ using Heartbeat.Api.Roles;
 using Heartbeat.Api.Salud;
 using Heartbeat.Api.Users;
 using Heartbeat.Api.Vitals;
+using Heartbeat.Shared;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -96,15 +97,21 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
 
 builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddSingleton<IHealthEvaluator, HealthEvaluator>();
 
 // FC en vivo del Galaxy Watch 5 (Live/): un búfer en memoria por astronauta y difusión por SignalR a su grupo.
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<HeartRateStore>();
+builder.Services.AddSingleton<LiveHeartRateAggregator>();
+builder.Services.AddScoped<WearableReadingWriter>();
+builder.Services.AddHostedService<LiveHeartRatePersistenceService>();
 
 // Datos de Samsung Health desde el backend Python WatchSync (Salud/). Las contraseñas van en user-secrets.
 builder.Services.Configure<WatchSyncOptions>(builder.Configuration.GetSection("WatchSync"));
 builder.Services.AddSingleton<IWatchSyncClients>(sp =>
     new WatchSyncClients(sp.GetRequiredService<IOptions<WatchSyncOptions>>().Value));
+builder.Services.AddScoped<WatchSyncImportService>();
+builder.Services.AddHostedService<WatchSyncImportWorker>();
 
 var app = builder.Build();
 

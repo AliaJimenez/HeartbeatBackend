@@ -30,6 +30,8 @@ public static class LiveEndpoints
         HeartRateReading r,
         AppDbContext db,
         HeartRateStore store,
+        LiveHeartRateAggregator aggregator,
+        WearableReadingWriter writer,
         IHubContext<HeartRateHub> hubContext,
         CancellationToken ct)
     {
@@ -40,11 +42,11 @@ public static class LiveEndpoints
         }
 
         var hash = WatchKeys.Hash(key);
-        var astronautId = await db.WatchDevices.AsNoTracking()
+        var watch = await db.WatchDevices.AsNoTracking()
             .Where(w => w.KeyHash == hash)
-            .Select(w => (Guid?)w.AstronautId)
+            .Select(w => new { w.Id, w.AstronautId, w.DeviceId })
             .FirstOrDefaultAsync(ct);
-        if (astronautId is null)
+        if (watch is null)
         {
             return Results.Problem(title: "Unknown watch key", statusCode: StatusCodes.Status401Unauthorized);
         }
@@ -54,8 +56,21 @@ public static class LiveEndpoints
             return Results.BadRequest(new { error = "bpm fuera de rango" });
         }
 
-        store.For(astronautId.Value).Add(r);
-        await hubContext.Clients.Group(HeartRateHub.GroupFor(astronautId.Value)).SendAsync("HeartRate", r, ct);
+        store.For(watch.AstronautId).Add(r);
+        if (aggregator.Add(watch.Id, watch.AstronautId, watch.DeviceId, r) is { } completed)
+        {
+            await writer.SaveAsync(
+                completed.AstronautId,
+                completed.DeviceId,
+                $"live-heart-rate:{completed.WatchId:N}:{completed.Minute:O}",
+                completed.Minute,
+                Heartbeat.Shared.IndicatorType.HeartRate,
+                completed.Median,
+                null,
+                ct);
+        }
+
+        await hubContext.Clients.Group(HeartRateHub.GroupFor(watch.AstronautId)).SendAsync("HeartRate", r, ct);
         return Results.Ok();
     }
 
