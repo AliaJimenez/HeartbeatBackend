@@ -425,6 +425,7 @@ public static class CrewEndpoints
                 ReceivedAt = serverNow,
                 DoseMsv = dose.DoseMsv,
                 Note = note,
+                Type = dose.Type,
             });
             mine.Add(dose.Id);
             total += dose.DoseMsv;
@@ -557,7 +558,8 @@ public static class CrewEndpoints
             astronaut.UserName,
             astronaut.DisplayName,
             astronaut.CallSign,
-            new MissionInfo(astronaut.Mission.Id, astronaut.Mission.Name, astronaut.Mission.Environment, astronaut.Mission.StartsAt),
+            new MissionInfo(astronaut.Mission.Id, astronaut.Mission.Name, astronaut.Mission.Environment, astronaut.Mission.StartsAt,
+                new EnvironmentProfile(astronaut.Mission.EnvironmentType ?? astronaut.Mission.Environment, astronaut.Mission.GravityG, astronaut.Mission.DistanceKm, astronaut.Mission.CrewSize, astronaut.Mission.HabitableVolumeM3)),
             astronaut.DateOfBirth,
             astronaut.Notes,
             astronaut.UpdatedAt);
