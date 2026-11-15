@@ -116,7 +116,8 @@ public class OfflineSyncAlertE2ETests : IDisposable
         Assert.Contains(queue.Messages[0].Id, first.Accepted);
         Assert.Empty(first.Rejected);
         Assert.Empty(first.Inbound.Messages);
-        Assert.Empty(first.Inbound.AcknowledgedAlerts);
+        // A first pull (no LastPulledAt) brings what was already handled before, such as the seeded CO2 alert; not this one.
+        Assert.DoesNotContain(first.Inbound.AcknowledgedAlerts, a => a.CheckUpId == critical.Id);
         queue.CheckUps.Clear();
         queue.Messages.Clear();
         queue.LastPulledAt = first.ServerTime;

@@ -140,7 +140,7 @@ public class DemoDataSeederTests : IClassFixture<DemoDataSeederTests.Factory>
         Assert.Equal(HealthStatus.Critical, spike.OverallStatus);
         Assert.Equal((185m, 95m), (Value(spike, IndicatorType.BloodPressure), spike.Readings.Single(r => r.Indicator == IndicatorType.BloodPressure).SecondaryValue));
 
-        var alert = await Db(db => db.Alerts.SingleAsync(a => a.Astronaut.UserName == "a.rivera"));
+        var alert = await Db(db => db.Alerts.SingleAsync(a => a.Astronaut.UserName == "a.rivera" && a.Kind == AlertKind.CheckUp));
         Assert.Equal(spike.Id, alert.CheckUpId);
         Assert.Equal("BloodPressure", alert.Indicators);
         Assert.Null(alert.AcknowledgedAt);
@@ -168,7 +168,7 @@ public class DemoDataSeederTests : IClassFixture<DemoDataSeederTests.Factory>
         Assert.True(list.Take(16).All(c => c.OverallStatus == HealthStatus.Normal));
 
         Assert.DoesNotContain(list, c => c.OverallStatus == HealthStatus.Critical);
-        Assert.Equal(0, await Db(db => db.Alerts.CountAsync(a => a.Astronaut.UserName == "k.sato")));
+        Assert.Equal(0, await Db(db => db.Alerts.CountAsync(a => a.Astronaut.UserName == "k.sato" && a.Kind == AlertKind.CheckUp)));
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public class DemoDataSeederTests : IClassFixture<DemoDataSeederTests.Factory>
         Assert.All(list.Take(17), c => Assert.Equal(HealthStatus.Normal, c.OverallStatus));
         Assert.All(list.Skip(22), c => Assert.Equal(HealthStatus.Normal, c.OverallStatus));   // recovered
 
-        var alert = await Db(db => db.Alerts.SingleAsync(a => a.Astronaut.UserName == "l.haddad"));
+        var alert = await Db(db => db.Alerts.SingleAsync(a => a.Astronaut.UserName == "l.haddad" && a.Kind == AlertKind.CheckUp));
         Assert.Equal(list[19].Id, alert.CheckUpId);
         Assert.NotNull(alert.AcknowledgedAt);
         Assert.Equal("Rest 24h, recheck", alert.AcknowledgeNote);
