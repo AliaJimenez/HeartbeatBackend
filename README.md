@@ -46,6 +46,25 @@ dotnet build Heartbeat.sln
 dotnet run --project src/Heartbeat.Api/Heartbeat.Api.csproj
 ```
 
+### Claude assistant (optional)
+
+The authenticated crew endpoint `POST /api/crew/v1/assistant/chat` explains the caller's current `RiskStatus` and open
+alerts in plain language through Anthropic Claude. It is disabled by default, never participates in evaluation or sync,
+and receives no profile notes, messages, date of birth, credentials or tokens. If Claude is unavailable, the rest of
+Heartbeat continues to work normally.
+
+Configure the secret only in the API project; never commit it or place it in a frontend:
+
+```powershell
+cd src/Heartbeat.Api
+dotnet user-secrets set "AI:Enabled" "true"
+dotnet user-secrets set "AI:ApiKey" "sk-ant-..."
+dotnet user-secrets set "AI:Model" "<model-enabled-for-your-Anthropic-account>"
+```
+
+Production uses the equivalent environment variables `AI__Enabled`, `AI__ApiKey` and `AI__Model`. The desktop must use
+`CrewApi__Mode=Live` to reach this endpoint. An Anthropic user subscription and Anthropic API billing are separate.
+
 ## Test
 
 ```bash
