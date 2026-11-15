@@ -16,7 +16,7 @@ public static class RadiationSummaries
 
         var doses = rows
             .OrderByDescending(d => d.RecordedAt)
-            .Select(d => new RadiationDoseDto(d.Id, d.RecordedAt, d.ReceivedAt, d.DoseMsv, d.Note, d.Type))
+            .Select(d => new RadiationDoseDto(d.Id, d.RecordedAt, d.ReceivedAt, d.DoseMsv, d.Note))
             .ToList();
 
         return new RadiationSummaryDto(

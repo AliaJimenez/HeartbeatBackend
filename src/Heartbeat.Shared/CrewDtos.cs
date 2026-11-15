@@ -4,8 +4,7 @@ public sealed record MissionInfo(
     Guid Id,
     string Name,
     string Environment,
-    DateTimeOffset StartsAt,
-    EnvironmentProfile? EnvironmentProfile = null);
+    DateTimeOffset StartsAt);
 
 public sealed record AstronautProfile(
     Guid Id,
@@ -114,8 +113,7 @@ public sealed record RadiationDoseDto(
     DateTimeOffset RecordedAt,
     DateTimeOffset? ReceivedAt,
     decimal DoseMsv,
-    string? Note,
-    RadiationType Type = RadiationType.Gcr);
+    string? Note);
 
 public sealed record RadiationSummaryDto(
     decimal TotalMsv,
