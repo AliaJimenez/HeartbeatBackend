@@ -158,6 +158,8 @@ public sealed class DemoDataSeeder(IConfiguration configuration, ILogger<DemoDat
         }
     }
 
+    public const string MarsMissionName = "Artemis Mars Transit";
+
     private static async Task<Mission> EnsureMissionAsync(AppDbContext db, CancellationToken ct)
     {
         var mission = await db.Missions.FirstOrDefaultAsync(m => m.Name == MissionName, ct);
@@ -168,9 +170,37 @@ public sealed class DemoDataSeeder(IConfiguration configuration, ILogger<DemoDat
                 Id = Guid.CreateVersion7(),
                 Name = MissionName,
                 Environment = "station",
+                EnvironmentType = "station",
+                GravityG = 0m,
+                DistanceKm = 408m,
+                CrewSize = 4,
+                HabitableVolumeM3 = 388m,
                 StartsAt = new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero),
             };
             db.Missions.Add(mission);
+        }
+        else
+        {
+            mission.EnvironmentType = string.IsNullOrWhiteSpace(mission.EnvironmentType) ? mission.Environment : mission.EnvironmentType;
+        }
+
+        // Second profile: transit to Mars (HB-BE-04).
+        var mars = await db.Missions.FirstOrDefaultAsync(m => m.Name == MarsMissionName, ct);
+        if (mars is null)
+        {
+            mars = new Mission
+            {
+                Id = Guid.CreateVersion7(),
+                Name = MarsMissionName,
+                Environment = "spacecraft",
+                EnvironmentType = "spacecraft",
+                GravityG = 0m,
+                DistanceKm = 225000000m,
+                CrewSize = 4,
+                HabitableVolumeM3 = 100m,
+                StartsAt = new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero),
+            };
+            db.Missions.Add(mars);
         }
 
         return mission;

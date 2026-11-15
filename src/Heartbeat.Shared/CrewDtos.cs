@@ -7,6 +7,14 @@ public sealed record MissionInfo(
     DateTimeOffset StartsAt,
     EnvironmentProfile? EnvironmentProfile = null);
 
+/// <summary>Mission environment profile + communication delay (HB-BE-04).</summary>
+public sealed record MissionProfileDto(
+    Guid Id,
+    string Name,
+    string Environment,
+    EnvironmentProfile EnvironmentProfile,
+    double CommunicationDelaySeconds);
+
 public sealed record AstronautProfile(
     Guid Id,
     string UserName,

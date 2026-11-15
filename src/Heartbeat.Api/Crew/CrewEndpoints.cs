@@ -20,6 +20,7 @@ public static class CrewEndpoints
         group.MapPost("/sync", SyncAsync);
         group.MapGet("/checkups", GetCheckUpsAsync);
         group.MapGet("/radiation", GetRadiationAsync);
+        group.MapGet("/mission", GetMissionAsync);
 
         return app;
     }
@@ -484,6 +485,30 @@ public static class CrewEndpoints
                 });
             }
         }
+    }
+
+    private static async Task<IResult> GetMissionAsync(
+        ClaimsPrincipal principal,
+        UserManager<ApplicationUser> userManager,
+        AppDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Problem(title: "Invalid token", statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        var astronaut = await db.Astronauts
+            .Include(a => a.Mission)
+            .FirstOrDefaultAsync(a => a.Id == userId.Value, cancellationToken);
+
+        if (astronaut is null)
+        {
+            return Results.Problem(title: "Astronaut profile not found", statusCode: StatusCodes.Status404NotFound);
+        }
+
+        return Results.Ok(McMissionEndpoints.ToDto(astronaut.Mission));
     }
 
     private static async Task<IResult> GetRadiationAsync(
