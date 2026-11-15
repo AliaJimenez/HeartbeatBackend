@@ -582,6 +582,23 @@ public sealed record EnvironmentReading(
     string? Note = null);
 ```
 
+**Ambiente por sync y consulta (HB-BE-03).** El escritorio empuja las lecturas en `environmentReadings` de `POST /api/crew/v1/sync` (`SyncRequest` gana `IReadOnlyList<EnvironmentReading>? EnvironmentReadings = null`). Solo se aceptan los indicadores del catálogo con `hazard: hostileClosedEnvironment` (`co2`, `o2`, `pressure`, `temperature`, `humidity`, `light`, `noise`); el resto va a `rejected`. Idempotente por `id`. La unidad la fija el catálogo. Cada lectura se evalúa con las bandas del catálogo (`min` incluido, `max` excluido) y una banda `critical` crea un `Alert` (`kind: "environment"`, `checkUpId: null`, `message` en lenguaje simple, "simulated"); mientras haya una alerta abierta del mismo indicador para ese astronauta no se crean más.
+
+`GET /api/mc/v1/crew/{id}/environment?indicator=&from=&to=&page=&pageSize=` (`vitals.view`) → `EnvironmentSummaryDto`: `status` (el peor de la última lectura de cada indicador), `latest` (una por indicador, ignora los filtros) y `history` paginado, más reciente primero. Todo es simulado (`simulated: true`).
+
+```csharp
+public sealed record EnvironmentReadingStatus(
+    Guid Id, DateTimeOffset RecordedAt, DateTimeOffset? ReceivedAt, string IndicatorId, string Name,
+    decimal Value, decimal? SecondaryValue, string Unit, HealthStatus Status, string Label,
+    CatalogStatus CatalogStatus, SourceLink Source, string? Note, bool Simulated = true);
+
+public sealed record EnvironmentSummaryDto(
+    HealthStatus Status, IReadOnlyList<EnvironmentReadingStatus> Latest,
+    Paged<EnvironmentReadingStatus> History, bool Simulated = true);
+
+public enum AlertKind { CheckUp, Radiation, Environment }
+```
+
 ### RadiationSummary (v2)
 
 Resumen de radiación de un astronauta: total acumulado, número de entradas, dosis, fuente (CSA) y, en v2, tipo dominante, tasa y % del límite.

@@ -289,6 +289,9 @@ public static class CrewEndpoints
         var radiationTotal = await SyncRadiationDosesAsync(
             db, userId.Value, request.RadiationDoses ?? [], serverNow, accepted, rejected, cancellationToken);
 
+        await EnvironmentReadings.SyncAsync(
+            db, userId.Value, astronaut.MissionId, request.EnvironmentReadings ?? [], serverNow, accepted, rejected, cancellationToken);
+
         AstronautProfile? responseProfile = null;
         if (request.Profile is not null && request.Profile.UpdatedAt > astronaut.UpdatedAt)
         {

@@ -107,7 +107,8 @@ public sealed record SyncRequest(
     UpdateProfileRequest? Profile,
     IReadOnlyList<CheckUpDto> CheckUps,
     IReadOnlyList<MessageDto> Messages,
-    IReadOnlyList<RadiationDoseDto>? RadiationDoses = null);
+    IReadOnlyList<RadiationDoseDto>? RadiationDoses = null,
+    IReadOnlyList<EnvironmentReading>? EnvironmentReadings = null);
 
 public sealed record SyncResponse(
     DateTimeOffset ServerTime,

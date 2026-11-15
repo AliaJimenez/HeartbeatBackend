@@ -34,3 +34,33 @@ public sealed record EnvironmentReading(
 {
     public string Indicator => IndicatorId;
 }
+
+/// <summary>
+/// An environment reading evaluated against the indicator catalog (contracts/indicators.catalog.json): the band it
+/// falls in, the catalog's <see cref="CatalogStatus"/> (verified | heuristic) and its source. Always simulated data.
+/// </summary>
+public sealed record EnvironmentReadingStatus(
+    Guid Id,
+    DateTimeOffset RecordedAt,
+    DateTimeOffset? ReceivedAt,
+    string IndicatorId,
+    string Name,
+    decimal Value,
+    decimal? SecondaryValue,
+    string Unit,
+    HealthStatus Status,
+    string Label,
+    CatalogStatus CatalogStatus,
+    SourceLink Source,
+    string? Note,
+    bool Simulated = true);
+
+/// <summary>
+/// GET /api/mc/v1/crew/{id}/environment: the latest reading of each indicator, the worst status among them, and
+/// the paged history (newest first).
+/// </summary>
+public sealed record EnvironmentSummaryDto(
+    HealthStatus Status,
+    IReadOnlyList<EnvironmentReadingStatus> Latest,
+    Paged<EnvironmentReadingStatus> History,
+    bool Simulated = true);

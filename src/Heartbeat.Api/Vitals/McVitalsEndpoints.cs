@@ -21,8 +21,47 @@ public static class McVitalsEndpoints
         group.MapGet("/checkups/{checkUpId:guid}", GetCheckUpAsync).RequirePermission(Permissions.VitalsView);
         group.MapGet("/series", GetSeriesAsync).RequirePermission(Permissions.VitalsHistory);
         group.MapGet("/radiation", GetRadiationAsync).RequirePermission(Permissions.VitalsView);
+        group.MapGet("/environment", GetEnvironmentAsync).RequirePermission(Permissions.VitalsView);
 
         return app;
+    }
+
+    private static async Task<IResult> GetEnvironmentAsync(
+        Guid id, AppDbContext db, CancellationToken ct,
+        string? indicator = null, DateTimeOffset? from = null, DateTimeOffset? to = null, int page = 1, int pageSize = DefaultPageSize)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (indicator is not null && Crew.EnvironmentReadings.EnvironmentIndicator(indicator) is null)
+        {
+            errors["indicator"] = ["indicator must be an environment indicator of the catalog (co2, o2, pressure, temperature, humidity, light, noise)."];
+        }
+
+        if (page < 1)
+        {
+            errors["page"] = ["page must be 1 or greater."];
+        }
+
+        if (pageSize is < 1 or > MaxPageSize)
+        {
+            errors["pageSize"] = [$"pageSize must be between 1 and {MaxPageSize}."];
+        }
+
+        if (from is not null && to is not null && from > to)
+        {
+            errors["from"] = ["from must not be after to."];
+        }
+
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
+        if (!await db.Astronauts.AnyAsync(a => a.Id == id, ct))
+        {
+            return AstronautNotFound();
+        }
+
+        return Results.Ok(await Crew.EnvironmentReadings.LoadAsync(db, id, indicator, from, to, page, pageSize, ct));
     }
 
     private static async Task<IResult> GetRadiationAsync(Guid id, AppDbContext db, CancellationToken ct)
