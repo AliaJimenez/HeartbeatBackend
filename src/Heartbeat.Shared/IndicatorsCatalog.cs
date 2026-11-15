@@ -4,6 +4,21 @@ namespace Heartbeat.Shared;
 
 public sealed record IndicatorBand(string Id, HealthStatus Status, decimal? Min, decimal? Max, string Label);
 
+/// <summary>A public NASA dataset (OSDR / LSDA) an indicator was checked against, and what it showed.</summary>
+public sealed record ValidationDataset(string Source, string Accession, string Organism, string Finding);
+
+/// <summary>
+/// Evidence from open NASA data for an indicator's bands (HB-DA-07). <see cref="Result"/> is
+/// <c>consistent</c>, <c>partial</c> or <c>needsReview</c>; <see cref="Supports"/> and
+/// <see cref="DoesNotSupport"/> say exactly which numbers the data back and which they do not.
+/// </summary>
+public sealed record IndicatorValidation(
+    string Checked,
+    string Result,
+    IReadOnlyList<ValidationDataset> Datasets,
+    string Supports,
+    string DoesNotSupport);
+
 public sealed record IndicatorCatalogEntry(
     string Id,
     string Name,
@@ -12,7 +27,8 @@ public sealed record IndicatorCatalogEntry(
     string Source,
     CatalogStatus Status,
     IReadOnlyList<IndicatorBand> Bands,
-    decimal BaselineThreshold = 2m);
+    decimal BaselineThreshold = 2m,
+    IndicatorValidation? Validation = null);
 
 public static class IndicatorsCatalog
 {
@@ -68,6 +84,23 @@ public static class IndicatorsCatalog
 
             var baselineThreshold = ind.TryGetProperty("baselineThreshold", out var bt) ? bt.GetDecimal() : 2m;
 
+            IndicatorValidation? validation = null;
+            if (ind.TryGetProperty("validation", out var v))
+            {
+                validation = new IndicatorValidation(
+                    v.GetProperty("checked").GetString()!,
+                    v.GetProperty("result").GetString()!,
+                    v.GetProperty("datasets").EnumerateArray()
+                        .Select(d => new ValidationDataset(
+                            d.GetProperty("source").GetString()!,
+                            d.GetProperty("accession").GetString()!,
+                            d.GetProperty("organism").GetString()!,
+                            d.GetProperty("finding").GetString()!))
+                        .ToList(),
+                    v.GetProperty("supports").GetString()!,
+                    v.GetProperty("doesNotSupport").GetString()!);
+            }
+
             entries.Add(new IndicatorCatalogEntry(
                 ind.GetProperty("id").GetString()!,
                 ind.GetProperty("name").GetString()!,
@@ -76,7 +109,8 @@ public static class IndicatorsCatalog
                 ind.GetProperty("source").GetString()!,
                 Enum.Parse<CatalogStatus>(ind.GetProperty("status").GetString()!, ignoreCase: true),
                 bands,
-                baselineThreshold));
+                baselineThreshold,
+                validation));
         }
 
         if (entries.Count == 0)
@@ -109,6 +143,36 @@ public static class IndicatorsCatalog
             if (!sources.TryGetProperty(entry.Source, out _))
             {
                 throw new InvalidOperationException($"Indicator '{entry.Id}' references an unknown source '{entry.Source}'.");
+            }
+        }
+
+        // Validation against open NASA data (HB-DA-07): datasets must exist in the sources, and an indicator can only be
+        // 'verified' by its validation when the data are fully consistent with its bands.
+        foreach (var entry in entries.Where(e => e.Validation is not null))
+        {
+            var validation = entry.Validation!;
+            if (validation.Result is not ("consistent" or "partial" or "needsReview"))
+            {
+                throw new InvalidOperationException($"Indicator '{entry.Id}' has an unknown validation result '{validation.Result}'.");
+            }
+
+            if (validation.Datasets.Count == 0)
+            {
+                throw new InvalidOperationException($"Indicator '{entry.Id}' has a validation without datasets.");
+            }
+
+            foreach (var dataset in validation.Datasets)
+            {
+                if (!sources.TryGetProperty(dataset.Source, out _))
+                {
+                    throw new InvalidOperationException($"Indicator '{entry.Id}' validates against an unknown source '{dataset.Source}'.");
+                }
+            }
+
+            if (entry.Status == CatalogStatus.Verified && validation.Result != "consistent")
+            {
+                throw new InvalidOperationException(
+                    $"Indicator '{entry.Id}' is 'verified' but its validation is '{validation.Result}'; keep it 'heuristic' until the data are consistent.");
             }
         }
 

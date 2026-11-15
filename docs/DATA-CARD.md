@@ -57,7 +57,24 @@ Las fuentes están en `contracts/reference-ranges.json` (`sources`) y `contracts
 
 Ningún valor `heuristic` se presenta como oficial en el pitch.
 
-## 7. Limitaciones
+## 7. Validación con datos abiertos de NASA (OSDR / LSDA)
+
+Se contrastaron indicadores del catálogo con estudios del [NASA Open Science Data Repository](https://osdr.nasa.gov/bio/repo/) y del Life Sciences Data Archive. La evidencia está en el bloque `validation` de cada indicador en `contracts/indicators.catalog.json` (fecha, estudios, hallazgo, qué respalda y qué no). El cargador de `Heartbeat.Shared` valida que los estudios existan en `sources` y **no deja marcar `verified` un indicador cuya validación no sea `consistent`**.
+
+| Indicador | Estudios | Qué muestran | Resultado |
+| --- | --- | --- | --- |
+| `iop` (mmHg) | OSD-816 (ojos humanos ex vivo), OSD-715 y RR-9 (ratones, 35 días en la ISS) | El análogo de SANS usa 16 mmHg como control y 21 mmHg como elevada; la IOP medida en vuelo quedó entre 14.4 y 20.3 mmHg | `partial`: respalda el límite normal/watch de 21; no respalda 25 ni 10 |
+| `radiationRate` (mSv/día) | OSD-714 (dosímetros Bio PADLES en la ISS) | Dosis equivalente de 0.48 y 0.79 mSv/día (0.31 y 0.36 mGy/día absorbida) | `partial`: el rango típico de la ISS cae en `normal`; no respalda los bordes de 1.5 y 3 |
+| `gravity` (g) | OSD-714 (centrífuga en la ISS, 1/6 g) | La gravedad lunar evitó la atrofia del sóleo pero no el cambio de tipo de fibra | `needsReview`: marcar `critical` por debajo de 0.3 g parece exagerado para la Luna; las bandas no se han cambiado |
+
+Consecuencias:
+
+- **Ninguno se promovió a `verified`**, porque ningún estudio respalda los umbrales extremos. Un resultado `partial` deja el indicador en `heuristic`.
+- **`radiationRate` pasó de `verified` a `heuristic`.** Estaba marcado `verified` con la fuente del límite de carrera de NASA, que fija 600 mSv y 250 mSv por SPE, pero no bandas diarias. Los límites de `radiation` (acumulada) sí vienen de NASA y siguen `verified`.
+- Los datos son de ratones y de tejido humano ex vivo, no de astronautas: sirven para contrastar órdenes de magnitud, no para validar clínicamente.
+- Pendiente de revisión del equipo: las bandas de `gravity` para la Luna.
+
+## 8. Limitaciones
 
 - Los rangos son demo-grade, basados en referencias clínicas generales para adultos en reposo. NASA HRP no publica umbrales; solo explica por qué importa cada indicador.
 - Todo dato nuevo (ambiente, radiación, IOP, PVT, aislamiento, confinamiento, phantoms) es simulado y se etiqueta así.
