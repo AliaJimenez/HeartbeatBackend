@@ -16,7 +16,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Alert> Alerts => Set<Alert>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<RadiationDose> RadiationDoses => Set<RadiationDose>();
-    public DbSet<EnvironmentReading> EnvironmentReadings => Set<EnvironmentReading>();
     public DbSet<PortalUser> PortalUsers => Set<PortalUser>();
     public new DbSet<Role> Roles => Set<Role>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
@@ -73,18 +72,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             e.Property(d => d.Note).HasMaxLength(Heartbeat.Shared.RadiationDoses.NoteMaxLength);
             e.HasIndex(d => d.AstronautId);
             e.HasOne(d => d.Astronaut).WithMany().HasForeignKey(d => d.AstronautId);
-        });
-
-        builder.Entity<EnvironmentReading>(e =>
-        {
-            e.Property(r => r.IndicatorId).HasMaxLength(100);
-            e.Property(r => r.Unit).HasMaxLength(32);
-            e.Property(r => r.Note).HasMaxLength(200);
-            e.HasIndex(r => r.AstronautId);
-            e.HasIndex(r => r.MissionId);
-            e.HasIndex(r => r.RecordedAt);
-            e.HasOne(r => r.Astronaut).WithMany().HasForeignKey(r => r.AstronautId).IsRequired(false);
-            e.HasOne(r => r.Mission).WithMany().HasForeignKey(r => r.MissionId).IsRequired(false);
         });
 
         builder.Entity<Message>()
