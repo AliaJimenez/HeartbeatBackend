@@ -1,6 +1,6 @@
 # Heartbeat — Data Model & API Contracts
 
-Version 0.1 · Nov 14, 2026 · Hours 0–4 deliverable
+Version 0.2 · Nov 14, 2026 · Hours 0–4 deliverable. 0.2 adds `Reading.Source` and `Reading.DeviceId` (smartwatch readiness, issue #9).
 
 This file is the agreement every workstream builds against. Change it only by team agreement, and bump the version when you do.
 
@@ -37,6 +37,7 @@ public enum IndicatorType { BloodPressure, HeartRate, BloodSugar, BodyTemperatur
 public enum HealthStatus  { Normal = 0, Watch = 1, Critical = 2 }   // order matters: worst = max
 public enum Hazard        { SpaceRadiation, IsolationAndConfinement, DistanceFromEarth, GravityFields, HostileClosedEnvironment }
 public enum EscalationContact { Self, CrewMedicalOfficer }
+public enum ReadingSource { Manual, Wearable }                        // where a reading came from
 
 // What the astronaut enters. BloodPressure: Value = systolic, SecondaryValue = diastolic.
 public sealed record ReadingInput(IndicatorType Indicator, decimal Value, decimal? SecondaryValue = null);
@@ -138,6 +139,8 @@ erDiagram
 | SecondaryValue | decimal(6,2)? | diastolic for blood pressure |
 | Status | HealthStatus | |
 | BandIds | string | comma-separated band IDs |
+| Source | ReadingSource | `manual` (default; typed by the astronaut) or `wearable` (imported from a smartwatch). Existing rows are `manual`. |
+| DeviceId | string(100)? | identifies the wearable that produced the reading; `null` for manual readings |
 
 A check-up may contain 1–6 readings, one per indicator. Readings are never updated or deleted. To correct a mistake, the astronaut saves a new check-up with `SupersedesId`; history and charts hide superseded check-ups. This makes sync conflict-free.
 
@@ -273,9 +276,11 @@ Every endpoint except `auth/*` requires a crew token. The astronaut ID always co
   "supersedesId": null,
   "readings": [
     { "id": "0193b…", "indicator": "bloodPressure", "value": 185, "secondaryValue": 95,
-      "status": "critical", "bandIds": ["bp-sys-critical-high", "bp-dia-watch-high"] },
+      "status": "critical", "bandIds": ["bp-sys-critical-high", "bp-dia-watch-high"],
+      "source": "manual", "deviceId": null },
     { "id": "0193c…", "indicator": "heartRate", "value": 88, "secondaryValue": null,
-      "status": "normal", "bandIds": ["hr-normal"] },
+      "status": "normal", "bandIds": ["hr-normal"],
+      "source": "wearable", "deviceId": "pixel-watch-3" },
     { "id": "0193d…", "indicator": "mood", "value": 4, "secondaryValue": null,
       "status": "normal", "bandIds": ["mood-normal"] }
   ]
@@ -320,6 +325,7 @@ One call pushes everything pending and pulls everything new. It is idempotent: s
 ```
 
 Server rules:
+- Store each reading's `source` and `deviceId` as sent. A missing `source` means `manual`. A `deviceId` longer than 100 characters rejects the check-up. Wearable readings are evaluated exactly like manual ones.
 - Re-evaluate every check-up with the shared evaluator. If the result differs from what the desktop sent (for example older ranges), store the server's result; the desktop shows it after the next pull.
 - Create an `Alert` for every accepted check-up whose overall status is `critical`.
 - Profile edits: the newer `updatedAt` wins.

@@ -50,7 +50,9 @@ public sealed record ReadingDto(
     decimal Value,
     decimal? SecondaryValue,
     HealthStatus Status,
-    IReadOnlyList<string> BandIds);
+    IReadOnlyList<string> BandIds,
+    ReadingSource Source = ReadingSource.Manual,
+    string? DeviceId = null);
 
 public sealed record CheckUpDto(
     Guid Id,
