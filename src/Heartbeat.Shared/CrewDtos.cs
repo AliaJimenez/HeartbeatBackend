@@ -184,6 +184,20 @@ public sealed record AstronautStatusDto(
     DateTimeOffset? LastSyncAt,
     IReadOnlyList<IndicatorStatusDto> Indicators);
 
+/// <summary>A shaded range of a chart: Min &lt;= value &lt; Max. A missing Min or Max means no limit.</summary>
+public sealed record SeriesBandDto(HealthStatus Status, decimal? Min, decimal? Max);
+
+/// <summary>One chart point. T is the check-up's RecordedAt.</summary>
+public sealed record SeriesPointDto(DateTimeOffset T, decimal Value, decimal? SecondaryValue, HealthStatus Status);
+
+/// <summary>Trend of one indicator, oldest point first. Bands are those of the primary value
+/// (systolic for blood pressure); points of replaced check-ups are excluded.</summary>
+public sealed record SeriesDto(
+    IndicatorType Indicator,
+    string Unit,
+    IReadOnlyList<SeriesBandDto> Bands,
+    IReadOnlyList<SeriesPointDto> Points);
+
 /// <summary>CheckUpDto fields plus the evaluation (label, guidance, escalation, sources) of each reading.</summary>
 public sealed record CheckUpDetailDto(
     Guid Id,

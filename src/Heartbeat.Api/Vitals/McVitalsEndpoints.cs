@@ -19,6 +19,7 @@ public static class McVitalsEndpoints
         group.MapGet("/status", GetStatusAsync).RequirePermission(Permissions.VitalsView);
         group.MapGet("/checkups", ListCheckUpsAsync).RequirePermission(Permissions.VitalsHistory);
         group.MapGet("/checkups/{checkUpId:guid}", GetCheckUpAsync).RequirePermission(Permissions.VitalsView);
+        group.MapGet("/series", GetSeriesAsync).RequirePermission(Permissions.VitalsHistory);
 
         return app;
     }
@@ -170,6 +171,58 @@ public static class McVitalsEndpoints
             checkUp.SupersedesId,
             readings.Select(ToDto).ToList(),
             evaluations));
+    }
+
+    private static async Task<IResult> GetSeriesAsync(
+        Guid id,
+        AppDbContext db,
+        RangesCatalog ranges,
+        CancellationToken ct,
+        string? indicator = null,
+        DateTimeOffset? from = null,
+        DateTimeOffset? to = null)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        // Parsed by hand: query-string enum binding is not reliably case-insensitive.
+        IndicatorType parsedIndicator = default;
+        if (string.IsNullOrWhiteSpace(indicator)
+            || !Enum.TryParse(indicator, ignoreCase: true, out parsedIndicator)
+            || !Enum.IsDefined(parsedIndicator))
+        {
+            errors["indicator"] = [$"indicator is required and must be one of: {string.Join(", ", Enum.GetNames<IndicatorType>().Select(n => char.ToLowerInvariant(n[0]) + n[1..]))}."];
+        }
+
+        if (from is not null && to is not null && from > to)
+        {
+            errors["from"] = ["from must not be later than to."];
+        }
+
+        if (errors.Count > 0)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
+        if (!await db.Astronauts.AnyAsync(a => a.Id == id, ct))
+        {
+            return AstronautNotFound();
+        }
+
+        var active = (await LoadActiveCheckUpsAsync(db, id, ct))
+            .Where(c => (from is null || c.RecordedAt >= from) && (to is null || c.RecordedAt <= to))
+            .ToDictionary(c => c.Id, c => c.RecordedAt);
+        var activeIds = active.Keys.ToList();
+
+        var readings = await db.Readings.AsNoTracking()
+            .Where(r => r.Indicator == parsedIndicator && activeIds.Contains(r.CheckUpId))
+            .ToListAsync(ct);
+
+        var points = readings
+            .OrderBy(r => active[r.CheckUpId])
+            .Select(r => new SeriesPointDto(active[r.CheckUpId], r.Value, r.SecondaryValue, r.Status))
+            .ToList();
+
+        return Results.Ok(new SeriesDto(parsedIndicator, ranges.UnitFor(parsedIndicator), ranges.BandsFor(parsedIndicator), points));
     }
 
     private static CheckUpDto ToDto(CheckUpRow row, IEnumerable<Reading> readings) => new(
