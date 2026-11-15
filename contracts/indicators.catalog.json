@@ -13,6 +13,35 @@
     "medline-iop": { "title": "Intraocular pressure (MedlinePlus)", "url": "https://medlineplus.gov/ency/article/003403.htm" },
     "medline-cognition": { "title": "Cognitive testing (MedlinePlus)", "url": "https://medlineplus.gov/cognitivetesting.html" }
   },
+  "phantomModel": {
+    "status": "heuristic",
+    "source": "nasa-hrp",
+    "note": "Simulated weekly changes at 0 g, scaled by (1 - g) and reduced by exercise. Heuristic values for the demo, not clinical predictions.",
+    "bonePctPerWeek": -0.25,
+    "musclePctPerWeek": -0.6,
+    "fluidShiftMaxPct": 2.0,
+    "iopRiseMaxMmHg": 3.0,
+    "fluidTauWeeks": 3.0,
+    "exerciseHoursForMaxMitigation": 10,
+    "maxExerciseMitigation": 0.6,
+    "femaleBoneFactor": 1.1,
+    "ageBoneFactorOver50": 1.2,
+    "maxWeeks": 104,
+    "regionFactors": {
+      "height": { "from": "fluid", "factor": 0.4 },
+      "neck": { "from": "fluid", "factor": 0.3 },
+      "chest": { "from": "muscle", "factor": 0.2 },
+      "waist": { "from": "muscle", "factor": 0.2 },
+      "thigh": { "from": "muscle", "factor": 0.5 },
+      "calf": { "from": "muscle", "factor": 0.6 }
+    }
+  },
+  "phantoms": [
+    { "id": "phantom-f35", "name": "Phantom A", "sex": "female", "ageYears": 35, "massKg": 62, "status": "heuristic" },
+    { "id": "phantom-m40", "name": "Phantom B", "sex": "male", "ageYears": 40, "massKg": 80, "status": "heuristic" },
+    { "id": "phantom-f55", "name": "Phantom C", "sex": "female", "ageYears": 55, "massKg": 58, "status": "heuristic" },
+    { "id": "phantom-m28", "name": "Phantom D", "sex": "male", "ageYears": 28, "massKg": 72, "status": "heuristic" }
+  ],
   "indicators": [
     { "id": "radiation", "name": "Radiación acumulada", "unit": "mSv", "hazard": "spaceRadiation", "source": "nasa-radiation-brief", "status": "verified", "baselineThreshold": 2.5, "bands": [ { "status": "normal", "min": 0, "max": 300 }, { "status": "watch", "min": 300, "max": 600 }, { "status": "critical", "min": 600 } ] },
     { "id": "radiationRate", "name": "Tasa de dosis", "unit": "mSv/día", "hazard": "spaceRadiation", "source": "nasa-radiation-brief", "status": "verified", "bands": [ { "status": "normal", "min": 0, "max": 1.5 }, { "status": "watch", "min": 1.5, "max": 3 }, { "status": "critical", "min": 3 } ] },

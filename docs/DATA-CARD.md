@@ -40,6 +40,7 @@ Nada de esto es un diagnóstico médico. La app es una herramienta de autoevalua
 | Confinamiento (0–1) | (min(m³/persona_ref / m³/persona, 1) + min(horas/24, 1)) / 2 | `heuristic` |
 | % límite de carrera (radiación) | dosis acumulada / 600 mSv · 100 | `verified` (límite NASA) |
 | % límite SPE | dosis del evento / 250 mSv · 100 | `verified` (límite NASA) |
+| Phantoms (cambio por semana) | hueso -0.25 %/sem y musculo -0.6 %/sem a 0 g, x (1 - g), x (1 - ejercicio hasta 60 %); fluidos +2 % e IOP +3 mmHg como maximo | `heuristic` |
 | Tasa GCR por entorno | ISS 0.5, Luna 1.3, Marte 0.7, espacio profundo 1.8 mSv/día | `heuristic` |
 | Semáforo | peor de los peligros; normal/watch/critical por umbral | `verified` (regla) |
 
