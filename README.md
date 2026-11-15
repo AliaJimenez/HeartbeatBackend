@@ -2,6 +2,13 @@
 
 NASA Space Apps 2026 — astronaut self-assessment and Mission Control platform.
 
+> **Datos simulados.** Las demostraciones, semillas y datos de ejemplo son ficticios y sirven para probar los flujos del sistema.
+>
+> **Herramienta de apoyo a la decisión; no diagnóstico médico.** Heartbeat no es un dispositivo médico y no diagnostica, previene ni trata enfermedades.
+> No uses sus estados, alertas ni umbrales como consejo médico.
+
+Los umbrales y fórmulas son configurables y se mantienen en el catálogo de indicadores, no en la UI. Cada entrada documenta su `source` y el estado de la evidencia (`verified` o `heuristic`). Consulta también la [data card](docs/DATA-CARD.md) para conocer el origen y las limitaciones de los datos.
+
 ## Projects in this repository
 
 | Project | Type | Target |
