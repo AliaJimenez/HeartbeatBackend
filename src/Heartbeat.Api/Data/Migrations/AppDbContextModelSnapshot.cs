@@ -198,6 +198,57 @@ namespace Heartbeat.Api.Data.Migrations
                     b.ToTable("CheckUps");
                 });
 
+            modelBuilder.Entity("Heartbeat.Api.Data.Entities.EnvironmentReading", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("AstronautId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IndicatorId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("MissionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ReceivedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("SecondaryValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Simulated")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Value")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AstronautId");
+
+                    b.HasIndex("MissionId");
+
+                    b.HasIndex("RecordedAt");
+
+                    b.ToTable("EnvironmentReadings");
+                });
+
             modelBuilder.Entity("Heartbeat.Api.Data.Entities.Message", b =>
                 {
                     b.Property<Guid>("Id")
@@ -251,8 +302,24 @@ namespace Heartbeat.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("CrewSize")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("DistanceKm")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Environment")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EnvironmentType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("GravityG")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("HabitableVolumeM3")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
@@ -307,9 +374,6 @@ namespace Heartbeat.Api.Data.Migrations
                     b.Property<Guid>("AstronautId")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Type")
-                        .HasColumnType("INTEGER");
-
                     b.Property<decimal>("DoseMsv")
                         .HasColumnType("TEXT");
 
@@ -322,6 +386,9 @@ namespace Heartbeat.Api.Data.Migrations
 
                     b.Property<DateTimeOffset>("RecordedAt")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -565,6 +632,21 @@ namespace Heartbeat.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Astronaut");
+                });
+
+            modelBuilder.Entity("Heartbeat.Api.Data.Entities.EnvironmentReading", b =>
+                {
+                    b.HasOne("Heartbeat.Api.Data.Entities.Astronaut", "Astronaut")
+                        .WithMany()
+                        .HasForeignKey("AstronautId");
+
+                    b.HasOne("Heartbeat.Api.Data.Entities.Mission", "Mission")
+                        .WithMany()
+                        .HasForeignKey("MissionId");
+
+                    b.Navigation("Astronaut");
+
+                    b.Navigation("Mission");
                 });
 
             modelBuilder.Entity("Heartbeat.Api.Data.Entities.Message", b =>
