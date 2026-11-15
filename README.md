@@ -52,6 +52,10 @@ dotnet run --project src/Heartbeat.Api/Heartbeat.Api.csproj
 dotnet test Heartbeat.sln
 ```
 
+## Smartwatch
+
+Galaxy Watch 5 (FC en vivo) y Samsung Health (vía WatchSync): ver [docs/SMARTWATCH.md](docs/SMARTWATCH.md) para la arquitectura, la puesta en marcha y las limitaciones.
+
 ## Deploy
 
 See [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md): secrets via environment variables, SQLite on IIS, seed switch and smoke test.
