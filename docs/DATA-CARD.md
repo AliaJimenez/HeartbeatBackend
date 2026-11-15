@@ -27,7 +27,7 @@ Nada de esto es un diagnóstico médico. La app es una herramienta de autoevalua
 - `DemoDataSeeder` (`src/Heartbeat.Api/Data/Seeding/DemoDataSeeder.cs`) genera la demo con semilla fija: `Random(42)` para ambiente, `Random(7)` para IOP/PVT.
 - Las mismas semillas producen siempre los mismos datos (prueba en `DemoDataSeederTests`).
 - Eventos en fechas conocidas:
-  - **Día 20 (de 30)**: pico de CO₂ y SPE en Leila Haddad (38.4 → 39.2 °C).
+  - **Día 20 (de 30)**: pico de CO₂ del hábitat (está en el historial de los tres) y, en Leila Haddad, un SPE y la fiebre (38.4 → 39.2 °C). Cada evento tiene su alerta, ya reconocida por el cirujano (ver `docs/QA-E2E.md`).
   - **Últimos 14 días**: privación de sueño en Kenji Sato (sueño de 7 h a 4.5 h, ánimo a 2).
   - **Día 30**: pico crítico de presión arterial en Ana Rivera, con alerta abierta y reporte.
 - Para repetir la demo desde cero: borra `heartbeat.db` (y `-shm`/`-wal`) con la API detenida y arranca con `Seed__Enabled=true`.

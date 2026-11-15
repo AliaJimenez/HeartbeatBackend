@@ -306,6 +306,9 @@ public sealed class DemoDataSeeder(IConfiguration configuration, ILogger<DemoDat
         // Simulated IOP / PVT-B readings are stored as environment readings keyed by indicator id.
         SeedSimulatedIndicators(db, id, lastRecorded, plan, now);
 
+        // The SPE and the CO2 spike above would have raised alerts through POST /sync; they were handled 10 days ago.
+        SeedHandledEventAlerts(db, id, surgeon, now);
+
         AddStoryMessages(db, plan, id, surgeon, checkUpsByDay, now);
     }
 
@@ -370,6 +373,59 @@ public sealed class DemoDataSeeder(IConfiguration configuration, ILogger<DemoDat
         }
     }
 
+    // Same rules as POST /sync: every solar particle event raises a radiation alert and every critical habitat reading an
+    // environment alert. The seeded events are old, so the flight surgeon already acknowledged them: they tell the
+    // story in the alert history without adding open alerts.
+    private static void SeedHandledEventAlerts(AppDbContext db, Guid astronautId, PortalUser surgeon, DateTimeOffset now)
+    {
+        foreach (var dose in db.RadiationDoses.Local.Where(d => d.AstronautId == astronautId && d.Type == RadiationType.Spe).ToList())
+        {
+            AddHandledAlert(
+                db, astronautId, surgeon, now, dose.ReceivedAt ?? dose.RecordedAt, AlertKind.Radiation,
+                RadiationDoses.AlertSpe, RadiationDoses.SpeAlertMessage(dose.DoseMsv), "Crew sheltered, dose monitored",
+                radiationDoseId: dose.Id);
+        }
+
+        foreach (var reading in db.EnvironmentReadings.Local.Where(r => r.AstronautId == astronautId).ToList())
+        {
+            var entry = Heartbeat.Api.Crew.EnvironmentReadings.EnvironmentIndicator(reading.IndicatorId);
+            if (entry is null)
+            {
+                continue;
+            }
+
+            var band = IndicatorsCatalog.Evaluate(entry, reading.Value);
+            if (band.Status != HealthStatus.Critical)
+            {
+                continue;
+            }
+
+            AddHandledAlert(
+                db, astronautId, surgeon, now, reading.ReceivedAt ?? reading.RecordedAt, AlertKind.Environment,
+                Heartbeat.Api.Crew.EnvironmentReadings.AlertMarker(entry.Id),
+                Heartbeat.Api.Crew.EnvironmentReadings.AlertMessage(entry, band, reading.Value), "Scrubber swapped, back to normal");
+        }
+    }
+
+    private static void AddHandledAlert(
+        AppDbContext db, Guid astronautId, PortalUser surgeon, DateTimeOffset now, DateTimeOffset createdAt,
+        AlertKind kind, string indicators, string message, string note, Guid? radiationDoseId = null)
+    {
+        db.Alerts.Add(new Alert
+        {
+            Id = Guid.CreateVersion7(),
+            AstronautId = astronautId,
+            Kind = kind,
+            RadiationDoseId = radiationDoseId,
+            Indicators = indicators,
+            Message = message,
+            CreatedAt = createdAt,
+            AcknowledgedAt = Earlier(createdAt.AddHours(1), now),
+            AcknowledgedByUserId = surgeon.Id,
+            AcknowledgeNote = note,
+        });
+    }
+
     private static void SeedSimulatedIndicators(AppDbContext db, Guid astronautId, DateTimeOffset lastRecorded, AstronautPlan plan, DateTimeOffset now)
     {
         // IOP and PVT-B as environment readings keyed by their indicator id. A sleep-deprivation streak
@@ -401,7 +457,7 @@ public sealed class DemoDataSeeder(IConfiguration configuration, ILogger<DemoDat
             MissionId = missionId,
             AstronautId = astronautId,
             IndicatorId = indicatorId,
-            Value = value,
+            Value = Math.Round(value, 2),   // the random walk gives 14 decimals; the instruments do not
             Unit = unit,
             RecordedAt = recordedAt,
             ReceivedAt = receivedAt,
