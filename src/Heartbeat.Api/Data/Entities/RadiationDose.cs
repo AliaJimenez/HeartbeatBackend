@@ -1,7 +1,11 @@
+using Heartbeat.Shared;
+
 namespace Heartbeat.Api.Data.Entities;
 
 public class RadiationDose
 {
+    public RadiationType Type { get; set; } = RadiationType.Gcr;
+
     public Guid Id { get; set; }
     public Guid AstronautId { get; set; }
     public DateTimeOffset RecordedAt { get; set; }

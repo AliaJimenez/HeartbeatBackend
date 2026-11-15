@@ -307,6 +307,9 @@ namespace Heartbeat.Api.Data.Migrations
                     b.Property<Guid>("AstronautId")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Type")
+                        .HasColumnType("INTEGER");
+
                     b.Property<decimal>("DoseMsv")
                         .HasColumnType("TEXT");
 
