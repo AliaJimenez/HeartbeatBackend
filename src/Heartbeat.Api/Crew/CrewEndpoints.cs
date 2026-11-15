@@ -494,12 +494,19 @@ public static class CrewEndpoints
         ClaimsPrincipal principal,
         UserManager<ApplicationUser> userManager,
         AppDbContext db,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        decimal hoursWithoutContact = 0m,
+        decimal continuousStayHours = 0m)
     {
         var userId = GetUserId(principal);
         if (userId is null)
         {
             return Results.Problem(title: "Invalid token", statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        if (McMissionEndpoints.ValidateHours(hoursWithoutContact, continuousStayHours) is { } invalid)
+        {
+            return invalid;
         }
 
         var astronaut = await db.Astronauts
@@ -511,7 +518,7 @@ public static class CrewEndpoints
             return Results.Problem(title: "Astronaut profile not found", statusCode: StatusCodes.Status404NotFound);
         }
 
-        return Results.Ok(McMissionEndpoints.ToDto(astronaut.Mission));
+        return Results.Ok(McMissionEndpoints.ToDto(astronaut.Mission, hoursWithoutContact, continuousStayHours));
     }
 
     private static async Task<IResult> GetRadiationAsync(

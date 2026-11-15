@@ -13,7 +13,8 @@ public sealed record MissionProfileDto(
     string Name,
     string Environment,
     EnvironmentProfile EnvironmentProfile,
-    double CommunicationDelaySeconds);
+    double CommunicationDelaySeconds,
+    IsolationConfinementIndices? Indices = null);
 
 public sealed record AstronautProfile(
     Guid Id,

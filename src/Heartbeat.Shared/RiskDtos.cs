@@ -25,7 +25,8 @@ public sealed record RiskStatus(
     HealthStatus Status,
     string Explanation,
     IReadOnlyList<HazardStatus> Hazards,
-    IReadOnlyList<PersonalDeviation>? PersonalDeviations = null)
+    IReadOnlyList<PersonalDeviation>? PersonalDeviations = null,
+    IsolationConfinementIndices? Indices = null)
 {
     public HealthStatus GlobalStatus => Status;
     public HealthStatus OverallStatus => Status;
@@ -34,3 +35,27 @@ public sealed record RiskStatus(
     public IReadOnlyList<HazardStatus> HazardStatuses => Hazards;
     public IReadOnlyList<PersonalDeviation> Deviations => PersonalDeviations ?? [];
 }
+/// <summary>
+/// One isolation or confinement index (0 to 1, higher is worse) evaluated against its entry in
+/// contracts/indicators.catalog.json: the band it falls in, the catalog status (verified | heuristic) and its source.
+/// </summary>
+public sealed record IsolationConfinementIndexDto(
+    string IndicatorId,
+    string Name,
+    decimal Value,
+    HealthStatus Status,
+    string Label,
+    CatalogStatus CatalogStatus,
+    SourceLink Source);
+
+/// <summary>
+/// Both indices for a mission environment (HB-BE-06), the worse of their statuses, and the time inputs used.
+/// Always simulated data; not a diagnosis.
+/// </summary>
+public sealed record IsolationConfinementIndices(
+    IsolationConfinementIndexDto Isolation,
+    IsolationConfinementIndexDto Confinement,
+    HealthStatus Status,
+    decimal HoursWithoutContact,
+    decimal ContinuousStayHours,
+    bool Simulated = true);

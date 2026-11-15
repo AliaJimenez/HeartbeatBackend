@@ -91,4 +91,102 @@ public static class IsolationConfinement
         if (index > 1m) index = 1m;
         return Math.Round(index, 4, MidpointRounding.AwayFromZero);
     }
+
+    /// <summary>One-way light travel time to the mission, in minutes (distance / c).</summary>
+    public static decimal CommDelayMinutes(decimal distanceKm) => distanceKm / SpeedOfLightKmPerSecond / 60m;
+
+    public const decimal SpeedOfLightKmPerSecond = 299792.458m;
+
+    /// <summary>
+    /// Both indices for a mission environment, each placed in the status band of its catalog entry
+    /// (<c>isolation</c> and <c>confinement</c> in contracts/indicators.catalog.json). The two time inputs are not part
+    /// of the profile: pass what the app knows (0 gives the index of the profile alone).
+    /// </summary>
+    public static IsolationConfinementIndices Evaluate(
+        EnvironmentProfile profile,
+        decimal hoursWithoutContact = 0m,
+        decimal continuousStayHours = 0m)
+    {
+        var isolation = IsolationIndex(
+            CommDelayMinutes(profile.DistanceKm), profile.DistanceKm, profile.CrewSize, hoursWithoutContact);
+        var confinement = ConfinementIndex(profile.HabitableVolumeM3, profile.CrewSize, continuousStayHours);
+
+        var isolationDto = ToDto(IsolationIndicatorId, isolation);
+        var confinementDto = ToDto(ConfinementIndicatorId, confinement);
+
+        return new IsolationConfinementIndices(
+            isolationDto,
+            confinementDto,
+            (HealthStatus)Math.Max((int)isolationDto.Status, (int)confinementDto.Status),
+            hoursWithoutContact,
+            continuousStayHours);
+    }
+
+    private static IsolationConfinementIndexDto ToDto(string indicatorId, decimal value)
+    {
+        var entry = IndicatorsCatalog.Find(indicatorId)
+            ?? throw new InvalidOperationException($"The indicators catalog has no '{indicatorId}' entry.");
+        var band = IndicatorsCatalog.Evaluate(entry, value);
+        return new IsolationConfinementIndexDto(
+            entry.Id,
+            entry.Name,
+            value,
+            band.Status,
+            string.IsNullOrWhiteSpace(band.Label) ? LevelWord(band.Status) : band.Label,
+            entry.Status,
+            IndicatorsCatalog.SourceFor(entry));
+    }
+
+    private static string LevelWord(HealthStatus status) => status switch
+    {
+        HealthStatus.Normal => "Low",
+        HealthStatus.Watch => "Moderate",
+        _ => "High",
+    };
+
+    /// <summary>
+    /// The <see cref="Hazard.IsolationAndConfinement"/> traffic light built from the two indices: the worse of
+    /// their statuses, with the worse index as value and the start of its critical band as limit.
+    /// </summary>
+    public static HazardStatus ToHazardStatus(IsolationConfinementIndices indices)
+    {
+        var worse = indices.Confinement.Status > indices.Isolation.Status ? indices.Confinement : indices.Isolation;
+        var critical = IndicatorsCatalog.Find(worse.IndicatorId)?.Bands
+            .FirstOrDefault(b => b.Status == HealthStatus.Critical)?.Min;
+
+        var explanation = indices.Status == HealthStatus.Normal
+            ? $"Isolation ({indices.Isolation.Value:0.##}) and confinement ({indices.Confinement.Value:0.##}) are low. Simulated indices, not a diagnosis."
+            : $"Isolation is {indices.Isolation.Label.ToLowerInvariant()} ({indices.Isolation.Value:0.##}) and confinement is {indices.Confinement.Label.ToLowerInvariant()} ({indices.Confinement.Value:0.##}). Simulated indices, not a diagnosis.";
+
+        return new HazardStatus(
+            Hazard.IsolationAndConfinement,
+            indices.Status,
+            explanation,
+            worse.Value,
+            critical,
+            "0-1",
+            worse.Source);
+    }
+
+    /// <summary>
+    /// Puts the isolation and confinement indices into a <see cref="RiskStatus"/>: replaces (or adds) the
+    /// <see cref="Hazard.IsolationAndConfinement"/> hazard, keeps the global status as the worst hazard and attaches
+    /// the indices. The global explanation is replaced only when this hazard raises the global status.
+    /// </summary>
+    public static RiskStatus WithIsolationConfinement(this RiskStatus risk, IsolationConfinementIndices indices)
+    {
+        var hazard = ToHazardStatus(indices);
+        var hazards = risk.Hazards.Where(h => h.Hazard != Hazard.IsolationAndConfinement).Append(hazard)
+            .OrderBy(h => h.Hazard)
+            .ToList();
+        var status = hazards.Max(h => h.Status);
+
+        return risk with
+        {
+            Status = status,
+            Explanation = status > risk.Status ? hazard.Explanation : risk.Explanation,
+            Hazards = hazards,
+            Indices = indices,
+        };
+    }
 }
