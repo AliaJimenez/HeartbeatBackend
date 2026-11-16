@@ -31,6 +31,9 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 
 builder.Services.AddSingleton<Heartbeat.Api.Vitals.RangesCatalog>();
 builder.Services.AddScoped<IDataSeeder, DemoDataSeeder>();
+// Opt-in on top of the base seed (Seed__WeeksOfUse=true): weeks of history, more users and messages. Registered as a
+// concrete class, not as a second IDataSeeder, so the base seed and its tests keep resolving a single seeder.
+builder.Services.AddScoped<WeeksOfUseSeeder>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(DeploymentSettings.ResolveSqliteConnectionString(
@@ -130,6 +133,11 @@ using (var scope = app.Services.CreateScope())
         foreach (var seeder in scope.ServiceProvider.GetServices<IDataSeeder>())
         {
             await seeder.SeedAsync(scope.ServiceProvider, CancellationToken.None);
+        }
+
+        if (app.Configuration.GetValue<bool>("Seed:WeeksOfUse"))
+        {
+            await scope.ServiceProvider.GetRequiredService<WeeksOfUseSeeder>().SeedAsync(scope.ServiceProvider, CancellationToken.None);
         }
     }
 }
