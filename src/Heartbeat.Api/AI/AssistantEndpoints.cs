@@ -13,13 +13,42 @@ public static class AssistantEndpoints
     {
         app.MapGroup("/api/crew/v1/assistant")
             .RequireAuthorization(AuthConstants.CrewPolicy)
-            .MapPost("/chat", ChatAsync);
+            .MapPost("/chat", ChatForCrewAsync);
+
+        app.MapPost("/api/mc/v1/crew/{astronautId:guid}/assistant/chat", ChatForMissionControlAsync)
+            .RequirePermission(Permissions.VitalsView);
         return app;
     }
 
-    private static async Task<IResult> ChatAsync(
+    private static async Task<IResult> ChatForCrewAsync(
         AssistantRequest request,
         ClaimsPrincipal caller,
+        IOptions<AiOptions> options,
+        AssistantContextBuilder contexts,
+        IAssistantProvider provider,
+        CancellationToken cancellationToken)
+    {
+        string? subject = caller.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+        if (!Guid.TryParse(subject, out Guid astronautId))
+        {
+            return Results.Problem(title: "Invalid token", statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        return await ChatAsync(request, astronautId, options, contexts, provider, cancellationToken);
+    }
+
+    private static Task<IResult> ChatForMissionControlAsync(
+        Guid astronautId,
+        AssistantRequest request,
+        IOptions<AiOptions> options,
+        AssistantContextBuilder contexts,
+        IAssistantProvider provider,
+        CancellationToken cancellationToken) =>
+        ChatAsync(request, astronautId, options, contexts, provider, cancellationToken);
+
+    private static async Task<IResult> ChatAsync(
+        AssistantRequest request,
+        Guid astronautId,
         IOptions<AiOptions> options,
         AssistantContextBuilder contexts,
         IAssistantProvider provider,
@@ -43,12 +72,6 @@ public static class AssistantEndpoints
         if (!settings.IsConfigured)
         {
             return Results.Problem(title: "AI assistant is not configured", detail: "Configure AI__ApiKey and AI__Model on the server.", statusCode: StatusCodes.Status503ServiceUnavailable);
-        }
-
-        string? subject = caller.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
-        if (!Guid.TryParse(subject, out Guid astronautId))
-        {
-            return Results.Problem(title: "Invalid token", statusCode: StatusCodes.Status401Unauthorized);
         }
 
         AssistantContext? context = await contexts.BuildAsync(astronautId, cancellationToken);

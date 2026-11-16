@@ -7,6 +7,7 @@ using Heartbeat.Api.AI;
 using Heartbeat.Api.Auth;
 using Heartbeat.Api.Data;
 using Heartbeat.Api.Data.Entities;
+using Heartbeat.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -118,6 +119,32 @@ public sealed class AssistantApiTests : IDisposable
             (await client.PostAsJsonAsync("/api/crew/v1/assistant/chat", new AssistantRequest(" "))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
             (await client.PostAsJsonAsync("/api/crew/v1/assistant/chat", new AssistantRequest(new string('x', 1_001)))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Mission_control_chat_requires_vitals_permission_and_uses_the_selected_astronaut()
+    {
+        var client = _factory.CreateClient();
+        string route = $"/api/mc/v1/crew/{_astronautId:D}/assistant/chat";
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.PostAsJsonAsync(route, new AssistantRequest("Estado"))).StatusCode);
+
+        var jwt = _factory.Services.GetRequiredService<JwtTokenService>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", jwt.CreateAccessToken(Guid.NewGuid(), "Operator", AuthConstants.McAudience));
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await client.PostAsJsonAsync(route, new AssistantRequest("Estado"))).StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", jwt.CreateAccessToken(
+                Guid.NewGuid(), "Flight Surgeon", AuthConstants.McAudience,
+                permissions: [Permissions.VitalsView]));
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            route, new AssistantRequest("  Resume el estado  ", "es"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(_astronautId, _provider.Context!.AstronautId);
+        Assert.Equal("Resume el estado", _provider.Question);
     }
 
     [Fact]

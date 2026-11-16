@@ -253,6 +253,7 @@ Every endpoint except `auth/*` requires a crew token. The astronaut ID always co
 | POST | `/sync` | `SyncRequest` → `SyncResponse` | MR-10, MR-11 |
 | GET | `/checkups?from=&to=&page=` | → `Paged<CheckUpDto>` (restore history on a new device) | MR-14 |
 | GET | `/radiation` | → `RadiationSummaryDto` (doses newest first, `totalMsv`, CSA `source`) | NR-07 |
+| POST | `/assistant/chat` | `AssistantRequest` → `AssistantResponse`; optional, explains the caller's calculated risk and open alerts | |
 
 ### Payloads
 
@@ -414,6 +415,7 @@ Guard rails: an admin cannot remove `users.manage` or `roles.manage` from their 
 | GET | `/crew/{id}/checkups/{checkUpId}` | `vitals.view` | → `CheckUpDto` + evaluations | MR-14 |
 | GET | `/crew/{id}/series?indicator=&from=&to=&source=all\|manual\|wearable` | `vitals.history` | → `SeriesDto`; every point includes its reading source | NR-02 |
 | GET | `/crew/{id}/radiation` | `vitals.view` | → `RadiationSummaryDto` | NR-07 |
+| POST | `/crew/{id}/assistant/chat` | `vitals.view` | `AssistantRequest` → `AssistantResponse`; optional explanation of calculated risk and open alerts | |
 | GET | `/alerts?state=open\|acknowledged\|all&page=` | `alerts.view` | → `Paged<AlertDto>` | MR-06 |
 | POST | `/alerts/{id}/acknowledge` | `alerts.acknowledge` | `{ "note": "…" }` → `AlertDto` | MR-06 |
 | GET | `/crew/{id}/messages?page=` | `messages.view` | → `Paged<MessageDto>` | MR-11 |
@@ -430,6 +432,13 @@ Guard rails: an admin cannot remove `users.manage` or `roles.manage` from their 
 | DELETE | `/roles/{id}` | `roles.manage` | → 204 (409 if system role or users still assigned) | MR-15 |
 | GET | `/permissions` | `roles.manage` | → `PermissionDto[]` (the checklist) | MR-15 |
 | GET | `/reference-ranges` | any signed-in | → raw JSON (info panels and sources) | MR-07 |
+
+The optional assistant is disabled by default. `AssistantRequest` contains `question` (1–1000 characters) and optional
+`language` (`es` or `en`). `AssistantResponse` contains `answer`, `generatedAt`, `provider`, `model`,
+`suggestedQuestions[]` and `disclaimer`. The provider receives only the astronaut identifier, display name, mission name,
+the `RiskStatus` already calculated by Heartbeat and up to ten open alerts. It does not receive profile notes, messages,
+credentials, tokens or date of birth. The answer is decision support only: it cannot calculate status, diagnose or replace
+official emergency procedures. Disabled or incomplete configuration returns 503; provider failure returns 502.
 
 ### Payloads
 
