@@ -139,7 +139,21 @@ POST http://<IP-del-equipo>:5000/api/heartrate
 X-Watch-Key: <clave del reloj>
 ```
 
-El equipo y el reloj tienen que estar en la misma red. Conviene reservar la IP del equipo en el router para que la URL no cambie.
+La app del reloj («FC en vivo», Wear OS) vive en [AliaJimenez/HeartbeatWatch](https://github.com/AliaJimenez/HeartbeatWatch) (`android/wear`), junto con el script `scripts/registrar-reloj.ps1`, que hace el paso 2.4 y te da el comando para configurarlo. Resumen:
+
+```bash
+cd HeartbeatWatch/android && ./gradlew :wear:assembleDebug        # JDK 17
+adb install -r wear/build/outputs/apk/debug/wear-debug.apk
+adb shell am start -n com.watchsync.live/.LiveActivity --es url http://<IP-del-equipo>:5000/api/heartrate --es key <clave>
+```
+
+La app recuerda la URL y la clave; también se pueden fijar al compilar con `-PliveUrl=... -PwatchKey=...`.
+
+**Una sola URL para todos.** El reloj envía a un único backend, así que una máquina hace de servidor y el resto se conecta a ella:
+
+- **Misma red:** el reloj usa `http://<IP-del-equipo>:5000/api/heartrate`. Los demás apuntan su escritorio (`CrewApi__BaseUrl=http://<IP>:5000/`) y su portal (`MissionControlApi__BaseUrl=http://<IP>:5000/api/mc/v1/`) a esa IP; el puerto `5027` solo escucha en `localhost`. Conviene reservar la IP del equipo en el router. Las Wi-Fi públicas suelen aislar los dispositivos: usa la zona Wi-Fi de un teléfono.
+- **Redes distintas, sin desplegar:** publica el puerto 5000 con una URL HTTPS fija (p. ej. `tailscale funnel 5000` → `https://<pc>.<tailnet>.ts.net`, o ngrok / Cloudflare Tunnel). El reloj usa `https://.../api/heartrate` directamente (no sigue redirecciones) y los frontends esa misma URL base. SignalR funciona por esos túneles.
+- **Desplegado:** ver [DESPLIEGUE.md](DESPLIEGUE.md). Una sola instancia: el búfer de lecturas vive en memoria.
 
 ### 2.6 Probar sin reloj
 
