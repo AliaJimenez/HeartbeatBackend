@@ -1,6 +1,31 @@
-# Heartbeat
+<h1 align="center">🫀 Heartbeat</h1>
 
-NASA Space Apps 2026 — astronaut self-assessment and Mission Control platform.
+<p align="center">
+  <b>NASA Space Apps 2026 — astronaut self-assessment and Mission Control platform.</b><br/>
+  <i>Plataforma de autoevaluación de salud para astronautas y Mission Control.</i>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/.NET-10-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 10"/>
+  <img src="https://img.shields.io/badge/ASP.NET_Core-Minimal_APIs-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt="ASP.NET Core"/>
+  <img src="https://img.shields.io/badge/tests-667_passing-2ea44f?style=for-the-badge" alt="667 tests passing"/>
+  <img src="https://img.shields.io/badge/NASA-Space_Apps_2026-0B3D91?style=for-the-badge&logo=nasa&logoColor=white" alt="NASA Space Apps 2026"/>
+</p>
+
+**EN** — Heartbeat lets astronauts record daily health check-ups (heart rate, sleep, activity, symptoms) and gives Mission Control a live view of each crew member's risk status, alerts and trends. This repository holds the backend: the API, the shared domain library, the API client and the test suite.
+
+**ES** — Heartbeat permite a los astronautas registrar chequeos diarios de salud (frecuencia cardíaca, sueño, actividad, síntomas) y ofrece a Mission Control una vista en vivo del estado de riesgo, las alertas y las tendencias de cada tripulante. Este repositorio contiene el backend: la API, la librería de dominio compartida, el cliente de la API y las pruebas.
+
+### 🧩 Platform repositories · Repositorios de la plataforma
+
+| Repo | Description |
+| --- | --- |
+| **HeartbeatBackend** (this repo) | API, shared domain, client and tests |
+| [HeartbeatWatch](https://github.com/AliaJimenez/HeartbeatWatch) | Galaxy Watch 5 app (live heart rate) and Samsung Health sync |
+| [HeartbeatFrontWeb](https://github.com/IsaiasMorillo/HeartbeatFrontWeb) | Mission Control web portal (Blazor) |
+| [HeartbeatFrontDesktop](https://github.com/IsaiasMorillo/HeartbeatFrontDesktop) | Crew desktop app (WPF) |
+
+---
 
 > **Datos simulados.** Las demostraciones, semillas y datos de ejemplo son ficticios y sirven para probar los flujos del sistema.
 >
